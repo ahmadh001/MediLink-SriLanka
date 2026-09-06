@@ -1,0 +1,13 @@
+﻿# Environment / Scratch files
+capture_all.py
+snap_65.py
+evidence/test_output.html
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs & Temporary files
+*.log

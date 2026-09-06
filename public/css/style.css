@@ -1,0 +1,329 @@
+/* MediLink Sri Lanka - Custom Healthcare Design System */
+
+:root {
+  --primary-teal: #007a87;
+  --primary-dark: #00565f;
+  --primary-light: #e0f2f1;
+  --accent-cyan: #00acc1;
+  --accent-emerald: #10b981;
+  --bg-soft: #f8fafc;
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --card-border: #e2e8f0;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--bg-soft);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1 0 auto;
+}
+
+/* Navbar */
+.navbar-custom {
+  background: linear-gradient(135deg, #00565f 0%, #007a87 100%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+.navbar-custom .navbar-brand {
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+}
+.navbar-custom .navbar-nav {
+  align-items: center;
+}
+.navbar-custom .nav-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.navbar-custom .nav-link i {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.navbar-custom .nav-link:hover, .navbar-custom .nav-link.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff !important;
+}
+
+/* Brand logo icon */
+.brand-icon {
+  background: #ffffff;
+  color: var(--primary-teal);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin-right: 8px;
+}
+
+/* Hero Section */
+.hero-section {
+  background: linear-gradient(135deg, #007a87 0%, #004d40 100%);
+  color: white;
+  padding: 4.5rem 0 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.hero-section::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 0);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+/* Custom Cards */
+.card-custom {
+  background: #ffffff;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-custom:hover {
+  box-shadow: var(--card-hover);
+}
+.card-stat {
+  border-left: 4px solid var(--primary-teal);
+}
+.card-stat.stat-warning {
+  border-left-color: #f59e0b;
+}
+.card-stat.stat-success {
+  border-left-color: #10b981;
+}
+.card-stat.stat-danger {
+  border-left-color: #ef4444;
+}
+
+/* Stat Number */
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+/* Subscription Tier Cards */
+.plan-card {
+  border: 2px solid var(--card-border);
+  border-radius: 16px;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+.plan-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--primary-teal);
+  box-shadow: 0 12px 24px rgba(0, 122, 135, 0.15);
+}
+.plan-card.featured {
+  border-color: var(--primary-teal);
+  background: #fafefe;
+}
+.plan-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+/* Slots UI */
+.slot-badge {
+  display: inline-block;
+  padding: 0.5rem 0.85rem;
+  margin: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.slot-badge:hover:not(.disabled) {
+  border-color: var(--primary-teal);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.slot-badge.selected {
+  background: var(--primary-teal);
+  color: white;
+  border-color: var(--primary-teal);
+}
+.slot-badge.booked {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* Quota Progress Bar */
+.quota-progress {
+  height: 10px;
+  border-radius: 5px;
+  background-color: #e2e8f0;
+}
+
+/* Buttons */
+.btn-teal {
+  background-color: var(--primary-teal);
+  border-color: var(--primary-teal);
+  color: white;
+  font-weight: 500;
+}
+.btn-teal:hover {
+  background-color: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: white;
+}
+.btn-outline-teal {
+  border-color: var(--primary-teal);
+  color: var(--primary-teal);
+  font-weight: 500;
+}
+.btn-outline-teal:hover {
+  background-color: var(--primary-teal);
+  color: white;
+}
+
+/* Color Utilities & High Contrast Text */
+.text-teal {
+  color: #007a87 !important;
+}
+.text-teal-dark {
+  color: #00565f !important;
+}
+.bg-teal {
+  background-color: #007a87 !important;
+  color: #ffffff !important;
+}
+.bg-teal-subtle {
+  background-color: #e0f2f1 !important;
+  color: #00565f !important;
+  border: 1px solid #b2dfdb !important;
+}
+
+/* Card & Modal Text Readability */
+.card, .card-custom, .modal-content {
+  color: var(--text-main) !important;
+}
+.card .text-muted, .card-custom .text-muted {
+  color: #64748b !important;
+}
+
+/* Hero Section text visibility override */
+.hero-section .card,
+.hero-section .card-custom {
+  color: #1e293b !important;
+}
+.hero-section .card label,
+.hero-section .card-custom label {
+  color: #334155 !important;
+}
+.hero-section .form-control,
+.hero-section .form-select {
+  color: #1e293b !important;
+  background-color: #ffffff !important;
+}
+
+/* Badges with Guaranteed Contrast */
+.badge {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.badge.bg-light {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+}
+.badge.bg-light.text-teal {
+  color: #007a87 !important;
+}
+.badge.bg-light.text-dark {
+  color: #0f172a !important;
+}
+.badge.bg-teal {
+  background-color: #007a87 !important;
+  color: #ffffff !important;
+}
+.badge.bg-teal-subtle {
+  background-color: #e0f2f1 !important;
+  color: #00565f !important;
+  border: 1px solid #b2dfdb !important;
+}
+.badge.bg-success-subtle {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+}
+.badge.bg-secondary-subtle {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+}
+
+/* Modal Headers */
+.modal-header.bg-teal {
+  background: linear-gradient(135deg, #00565f 0%, #007a87 100%) !important;
+  color: #ffffff !important;
+}
+
+/* Badges */
+.badge-lkr {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+}
+
+/* Table Enhancements */
+.table-custom {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+}
+.table-custom thead {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Footer */
+.footer-custom {
+  background-color: #0f172a;
+  color: #94a3b8;
+  padding: 3rem 0 1.5rem;
+  margin-top: auto;
+}
+.footer-custom a {
+  color: #cbd5e1;
+  text-decoration: none;
+}
+.footer-custom a:hover {
+  color: #38bdf8;
+}
+
