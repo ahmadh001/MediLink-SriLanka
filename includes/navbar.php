@@ -77,6 +77,7 @@ if ($user && ($isClient || $isProvider)) {
               <li><a class="dropdown-item" href="<?= url('admin/subscriptions.php') ?>"><i class="bi bi-receipt me-2"></i> Subscription Ledger</a></li>
               <li><a class="dropdown-item" href="<?= url('admin/plans.php') ?>"><i class="bi bi-tags me-2"></i> Subscription Plans</a></li>
               <li><a class="dropdown-item" href="<?= url('admin/specializations.php') ?>"><i class="bi bi-heart-pulse me-2"></i> Specializations</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/cities.php') ?>"><i class="bi bi-geo-alt me-2"></i> Manage Cities</a></li>
               <li><a class="dropdown-item" href="<?= url('admin/reports.php') ?>"><i class="bi bi-file-earmark-bar-graph me-2"></i> System Reports</a></li>
             </ul>
           </li>

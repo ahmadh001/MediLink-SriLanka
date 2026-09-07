@@ -67,7 +67,7 @@ function assertTest(string $testName, bool $condition, string $details = '') {
 $db = Database::getConnection();
 
 // TEST 1: Database Tables Existence
-$tables = ['USER', 'CLIENT', 'PROVIDER', 'DOCTOR', 'HEALTHCARE_CENTRE', 'CENTRE_DOCTOR_LINK', 'SPECIALIZATION', 'DOCTOR_SPECIALIZATION', 'SUBSCRIPTION_PLAN', 'USER_SUBSCRIPTION', 'SCHEDULED_SLOT', 'APPOINTMENT'];
+$tables = ['USER', 'CLIENT', 'PROVIDER', 'DOCTOR', 'HEALTHCARE_CENTRE', 'CENTRE_DOCTOR_LINK', 'CITY', 'SPECIALIZATION', 'DOCTOR_SPECIALIZATION', 'SUBSCRIPTION_PLAN', 'USER_SUBSCRIPTION', 'SCHEDULED_SLOT', 'APPOINTMENT'];
 $existingTables = $db->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
 $existingTablesLower = array_map('strtolower', $existingTables);
 

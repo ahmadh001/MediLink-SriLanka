@@ -124,10 +124,36 @@ function calculateHaversineDistance(float $lat1, float $lon1, float $lat2, float
 }
 
 /**
- * Sri Lankan Preset Cities with standard GPS coordinates
+ * Sri Lankan Cities with standard GPS coordinates (Loaded from database table `CITY`)
  */
 function getSriLankanCities(): array {
-    return [
+    static $cachedCities = null;
+    if ($cachedCities !== null) {
+        return $cachedCities;
+    }
+
+    try {
+        $db = Database::getConnection();
+        $stmt = $db->query("SELECT City_Name, District, Latitude, Longitude FROM `CITY` ORDER BY City_Name ASC");
+        $rows = $stmt->fetchAll();
+
+        if (!empty($rows)) {
+            $cachedCities = [];
+            foreach ($rows as $row) {
+                $cachedCities[$row['City_Name']] = [
+                    'lat'      => (float)$row['Latitude'],
+                    'lng'      => (float)$row['Longitude'],
+                    'district' => $row['District']
+                ];
+            }
+            return $cachedCities;
+        }
+    } catch (Exception $e) {
+        // Fallback to presets if database not ready
+    }
+
+    // Static fallback if table is empty or inaccessible
+    $cachedCities = [
         'Colombo'      => ['lat' => 6.9271, 'lng' => 79.8612, 'district' => 'Colombo'],
         'Kandy'        => ['lat' => 7.2906, 'lng' => 80.6337, 'district' => 'Kandy'],
         'Galle'        => ['lat' => 6.0535, 'lng' => 80.2210, 'district' => 'Galle'],
@@ -142,6 +168,7 @@ function getSriLankanCities(): array {
         'Badulla'      => ['lat' => 6.9934, 'lng' => 81.0550, 'district' => 'Badulla'],
         'Kalutara'     => ['lat' => 6.5854, 'lng' => 79.9607, 'district' => 'Kalutara']
     ];
+    return $cachedCities;
 }
 
 /**

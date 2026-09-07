@@ -115,7 +115,18 @@ CREATE TABLE `CENTRE_DOCTOR_LINK` (
     REFERENCES `DOCTOR` (`Doctor_ID`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. SPECIALIZATION Table
+-- 7. CITY Table (National City & GPS Geolocation Registry)
+CREATE TABLE `CITY` (
+  `City_ID` INT AUTO_INCREMENT PRIMARY KEY,
+  `City_Name` VARCHAR(100) NOT NULL UNIQUE,
+  `District` VARCHAR(100) NOT NULL,
+  `Latitude` DECIMAL(10, 8) NOT NULL,
+  `Longitude` DECIMAL(11, 8) NOT NULL,
+  `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_city_name` (`City_Name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 8. SPECIALIZATION Table
 CREATE TABLE `SPECIALIZATION` (
   `Specialization_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Name` VARCHAR(100) NOT NULL UNIQUE,
@@ -207,6 +218,22 @@ CREATE TABLE `APPOINTMENT` (
 -- Standard Demo Password for all accounts: Password123!
 -- Bcrypt Hash: $2y$10$wT8K8U1y0VbZl7k2oQ7beOi2h7l9y0b2k5m6n7o8p9q0r1s2t3u4v
 -- =======================================================================
+
+-- Cities & GPS Geolocation Registry
+INSERT INTO `CITY` (`City_ID`, `City_Name`, `District`, `Latitude`, `Longitude`) VALUES
+(1, 'Colombo', 'Colombo', 6.92710000, 79.86120000),
+(2, 'Kandy', 'Kandy', 7.29060000, 80.63370000),
+(3, 'Galle', 'Galle', 6.05350000, 80.22100000),
+(4, 'Negombo', 'Gampaha', 7.20080000, 79.87370000),
+(5, 'Gampaha', 'Gampaha', 7.08400000, 79.99390000),
+(6, 'Kurunegala', 'Kurunegala', 7.48180000, 80.36090000),
+(7, 'Matara', 'Matara', 5.95490000, 80.55500000),
+(8, 'Jaffna', 'Jaffna', 9.66150000, 80.02550000),
+(9, 'Anuradhapura', 'Anuradhapura', 8.31140000, 80.40370000),
+(10, 'Batticaloa', 'Batticaloa', 7.73100000, 81.67470000),
+(11, 'Ratnapura', 'Ratnapura', 6.68280000, 80.40000000),
+(12, 'Badulla', 'Badulla', 6.99340000, 81.05500000),
+(13, 'Kalutara', 'Kalutara', 6.58540000, 79.96070000);
 
 -- Specializations
 INSERT INTO `SPECIALIZATION` (`Specialization_ID`, `Name`, `Description`) VALUES
