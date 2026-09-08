@@ -14,4 +14,6 @@ Thumbs.db
 
 evidence
 generate_word_evidence.py
+generate_normalization_doc.py
+
 
