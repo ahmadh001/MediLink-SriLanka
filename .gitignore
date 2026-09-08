@@ -11,3 +11,7 @@ Thumbs.db
 
 # Logs & Temporary files
 *.log
+
+evidence
+generate_word_evidence.py
+
