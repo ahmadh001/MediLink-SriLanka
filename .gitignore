@@ -15,3 +15,7 @@ Thumbs.db
 
 # Logs & Temporary files
 *.log
+
+# Evidence files & local scripts
+evidence_screenshots/
+scripts/
