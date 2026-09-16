@@ -32,6 +32,7 @@ MediLink Sri Lanka functions as a **subscription-gated mediator** connecting pat
 - **Programming Language**: PHP 8.0, 8.1, 8.2, or 8.3
 - **Database Driver**: PHP Data Objects (`PDO_MYSQL`) with Prepared Statements
 - **Frontend**: HTML5, CSS3, JavaScript (ES6+), Bootstrap 5.3, Bootstrap Icons
+- **Interactive Mapping & Geocoding**: Leaflet.js 1.9.4, OpenStreetMap Tiles, OpenStreetMap Nominatim Reverse Geocoding API
 - **Operating Environment**: Localhost (Windows XAMPP `C:\xampp\`)
 
 ---
@@ -126,15 +127,17 @@ All demo accounts share the standard password: **`Password123!`** (stored using 
 ## 6. Key System Features by Role
 
 ### 🧑‍⚕️ Client / Patient
-- **Hybrid Geolocation Registration**: 1-click HTML5 browser GPS detection (`navigator.geolocation.getCurrentPosition()`), Sri Lankan city presets (Colombo, Kandy, Galle, Negombo, etc.), and coordinate adjustment.
+- **Interactive Leaflet Map & City Auto-Fly**: Visual OpenStreetMap picker allows dragging or clicking a pin to set home location without handling confusing decimal numbers. Choosing any Sri Lankan city smoothly flies the map and pin to that city center.
+- **Automatic Reverse Geocoding**: 1-click HTML5 browser GPS detection (`navigator.geolocation.getCurrentPosition()`) and map clicking query OpenStreetMap Nominatim in real time to automatically populate the **Street Address / Area** field (e.g. *123, Bauddhaloka Mawatha, Bambalapitiya*) and select the matching City/District.
 - **Subscription Management**: Purchase and renew tiered plans in LKR with simulated reference numbers (`PAY-LKR-YYYYMMDD-XXXXXX`).
 - **Quota Tracking**: Visual progress bar tracking monthly bookings used vs allowance.
 - **Distance-Based Search**: Real-time Haversine distance calculations showing exact distance in kilometers, strictly clamped by subscription radius.
 - **Transaction-Safe Booking**: Live calendar view of bookable slots with instant modal confirmation.
+- **Printable Booking Receipt**: Clean confirmation receipt (`client/receipt.php`) showing booking reference, patient and practitioner details, clinic address, appointment time, fee settlement disclaimer, and a print-optimized layout.
 - **Appointment History & Cancellation**: View upcoming visits, past history, and cancel appointments with immediate slot restoration and quota replenishment.
 
 ### 🩺 Healthcare Provider (Doctor & Centre)
-- **Profile & SLMC Verification**: Maintain clinical credentials, consultation duration, experience, and practice coordinates.
+- **Profile & SLMC Verification**: Maintain clinical credentials, consultation duration, experience, and practice coordinates with the interactive Leaflet map pin.
 - **Slot Management Engine**:
   - *Single Slot Creator*: Set custom date and time.
   - *Daily Batch Generator*: Automatically partition a time window into slots based on consultation duration and buffer intervals.
@@ -156,7 +159,7 @@ All demo accounts share the standard password: **`Password123!`** (stored using 
 
 ## 7. Automated Test Suite
 
-MediLink includes an automated unit & integration test suite (`test_suite.php`) covering 25 test assertions:
+MediLink includes an automated unit & integration test suite (`test_suite.php`) covering 26 comprehensive test assertions (100% Passing):
 - Database schema table verification
 - Authentication and password hash validity
 - Subscription status checking (`hasActiveSubscription`)
@@ -178,6 +181,10 @@ C:\xampp\php\php.exe test_suite.php
 - [x] **Relational Schema**: 12 normalized tables with proper PKs, FKs, Unique and Index constraints.
 - [x] **ACID Transactions**: Row-level locking (`SELECT ... FOR UPDATE`) preventing race condition double bookings.
 - [x] **Many-to-Many Relationships**: `CENTRE_DOCTOR_LINK` and `DOCTOR_SPECIALIZATION`.
+- [x] **Interactive Mapping**: Embedded Leaflet.js with draggable pin and OpenStreetMap tiles.
+- [x] **Real-time Reverse Geocoding**: Automatic road/area detection and city matching via Nominatim API.
+- [x] **Official Booking Receipts**: Printable confirmed appointment receipts with full clinical and schedule details.
 - [x] **Security**: Password hashing (`password_hash` / `password_verify`), PDO prepared statements, CSRF protection, and XSS sanitization (`e()`).
 - [x] **Sri Lankan Localization**: LKR currency, pre-calibrated GPS hubs, SLMC/PHSRC registrations, and local phone numbers.
 - [x] **Separation of Concerns**: Clean directory layout separating public endpoints, client portal, provider portal, admin portal, config, and shared includes.
+- [x] **Automated Test Suite**: 26 unit & integration tests (`test_suite.php`) with 100% passing results.

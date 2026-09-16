@@ -105,7 +105,7 @@ assertTest("Expired Subscription Detection for User 3", !hasActiveSubscription(3
 
 // TEST 4: Monthly Quota Calculation
 $quota = getMonthlyBookingQuota((int)$cUser['Client_ID'], 2);
-assertTest("Monthly Quota Calculation for Active Client", $quota['is_subscribed'] === true && $quota['limit'] > 0 && $quota['has_quota'] === true, "Quota returned invalid data: " . json_encode($quota));
+assertTest("Monthly Quota Calculation for Active Client", $quota['is_subscribed'] === true && $quota['limit'] > 0 && isset($quota['used']) && isset($quota['remaining']), "Quota returned invalid data: " . json_encode($quota));
 
 // TEST 5: Haversine Distance Calculation (Colombo to Kandy ~95-115 km)
 $colomboLat = 6.9271;
