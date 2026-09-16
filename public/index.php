@@ -46,22 +46,22 @@ $cities = getSriLankanCities();
 ?>
 
 <!-- Hero Section -->
-<section class="hero-section text-center text-md-start">
+<section class="hero-section text-center">
   <div class="container">
-    <div class="row align-items-center g-4">
-      <div class="col-lg-7">
-        <span class="badge bg-light text-dark px-3 py-2 rounded-pill fw-semibold mb-3">
+    <div class="row justify-content-center">
+      <div class="col-lg-10 col-xl-8">
+        <span class="badge bg-light text-dark px-3 py-2 rounded-pill fw-semibold mb-3 d-inline-block">
           <i class="bi bi-shield-check text-success me-1"></i> Sri Lanka's Verified Healthcare Network
         </span>
         <h1 class="display-4 fw-bold mb-3">Book Doctor Appointments Across Sri Lanka</h1>
-        <p class="lead text-light mb-4 opacity-90">
+        <p class="lead text-light mb-4 opacity-90 mx-auto" style="max-width: 700px;">
           Subscribe to MediLink for seamless search by GPS location, specialized medical discovery, and direct calendar appointment booking with verified practitioners.
         </p>
 
         <!-- Quick Search Bar Card -->
-        <div class="card card-custom p-3 shadow-lg border-0">
+        <div class="card card-custom p-3 shadow-lg border-0 mx-auto text-start" style="max-width: 800px;">
           <form action="<?= url('client/search.php') ?>" method="GET" class="row g-2 align-items-end">
-            <div class="col-md-5 text-start">
+            <div class="col-md-5">
               <label class="form-label text-muted small fw-semibold mb-1"><i class="bi bi-heart-pulse text-teal"></i> Specialization</label>
               <select name="specialization_id" class="form-select">
                 <option value="">All Specializations</option>
@@ -70,7 +70,7 @@ $cities = getSriLankanCities();
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="col-md-4 text-start">
+            <div class="col-md-4">
               <label class="form-label text-muted small fw-semibold mb-1"><i class="bi bi-geo-alt text-teal"></i> Location / City</label>
               <select name="city" class="form-select">
                 <option value="">All Sri Lankan Cities</option>
@@ -86,57 +86,6 @@ $cities = getSriLankanCities();
             </div>
           </form>
         </div>
-      </div>
-
-      <div class="col-lg-5 d-none d-lg-block">
-        <div class="card card-custom p-4 bg-white text-dark shadow-lg">
-          <h5 class="fw-bold mb-3 text-teal"><i class="bi bi-lightning-charge-fill text-warning me-1"></i> How Subscription Works</h5>
-          <div class="d-flex align-items-start gap-3 mb-3">
-            <div class="rounded-circle bg-light p-2 text-teal fw-bold">1</div>
-            <div>
-              <h6 class="fw-semibold mb-1">Choose a Client Plan</h6>
-              <p class="small text-muted mb-0">Select from Basic, Standard, or Premium based on your monthly booking & search radius needs in LKR.</p>
-            </div>
-          </div>
-          <div class="d-flex align-items-start gap-3 mb-3">
-            <div class="rounded-circle bg-light p-2 text-teal fw-bold">2</div>
-            <div>
-              <h6 class="fw-semibold mb-1">Search Verified Specialists</h6>
-              <p class="small text-muted mb-0">Filter by SLMC doctors, healthcare centres, and calculate exact distance via GPS.</p>
-            </div>
-          </div>
-          <div class="d-flex align-items-start gap-3">
-            <div class="rounded-circle bg-light p-2 text-teal fw-bold">3</div>
-            <div>
-              <h6 class="fw-semibold mb-1">Book & Attend</h6>
-              <p class="small text-muted mb-0">Instantly lock available schedule slots. Settle doctor consultation fees directly at the clinic.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Stats Bar -->
-<section class="py-4 bg-white border-bottom shadow-sm">
-  <div class="container">
-    <div class="row g-3 text-center">
-      <div class="col-6 col-md-3">
-        <div class="fw-bold fs-3 text-teal">SLMC</div>
-        <div class="small text-muted">Verified Medical Council Registry</div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="fw-bold fs-3 text-teal">100% Locked</div>
-        <div class="small text-muted">Race-Condition Safe Booking</div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="fw-bold fs-3 text-teal">Haversine GPS</div>
-        <div class="small text-muted">Radius-Based Islandwide Search</div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="fw-bold fs-3 text-teal">LKR Pricing</div>
-        <div class="small text-muted">Transparent Monthly Subscriptions</div>
       </div>
     </div>
   </div>

@@ -1,7 +1,11 @@
-﻿# Environment / Scratch files
-capture_all.py
-snap_65.py
+# Python files & caches
+*.py
+*.pyc
+__pycache__/
+
+# Environment / Scratch files
 evidence/test_output.html
+evidence
 
 # Operating System & IDE files
 .DS_Store
@@ -11,9 +15,3 @@ Thumbs.db
 
 # Logs & Temporary files
 *.log
-
-evidence
-generate_word_evidence.py
-generate_normalization_doc.py
-
-

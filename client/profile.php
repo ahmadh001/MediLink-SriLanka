@@ -148,38 +148,50 @@ require_once __DIR__ . '/../includes/header.php';
           <!-- Location and Coordinates -->
           <hr class="my-4">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold text-teal mb-0"><i class="bi bi-geo-alt-fill me-2"></i> Address & GPS Coordinates</h5>
+            <h5 class="fw-bold text-teal mb-0"><i class="bi bi-geo-alt-fill me-2"></i> Address & GPS Location</h5>
             <button type="button" id="btn-detect-location" class="btn btn-outline-teal btn-sm">
-              <i class="bi bi-crosshair me-1"></i> Detect My Current Location
+              <i class="bi bi-crosshair me-1"></i> Auto-Detect My Location
             </button>
           </div>
 
           <div class="mb-3">
             <label class="form-label small fw-semibold">Street / Residential Address</label>
-            <input type="text" name="address" class="form-control" value="<?= e($profile['Address']) ?>">
+            <input type="text" name="address" id="address-input" class="form-control" value="<?= e($profile['Address']) ?>">
           </div>
 
-          <div class="row g-3 mb-2">
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">City / District</label>
-              <select name="city" id="city-select" class="form-select">
-                <?php foreach ($cities as $cName => $cData): ?>
-                  <option value="<?= $cName ?>" <?= $profile['City'] === $cName ? 'selected' : '' ?>><?= $cName ?> (<?= $cData['district'] ?>)</option>
-                <?php endforeach; ?>
-              </select>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">City / District</label>
+            <select name="city" id="city-select" class="form-select">
+              <?php foreach ($cities as $cName => $cData): ?>
+                <option value="<?= $cName ?>" data-lat="<?= $cData['lat'] ?>" data-lng="<?= $cData['lng'] ?>" <?= $profile['City'] === $cName ? 'selected' : '' ?>>
+                  <?= $cName ?> (<?= $cData['district'] ?> District)
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+
+          <!-- Hidden GPS Coordinates -->
+          <input type="hidden" name="latitude" id="latitude-input" value="<?= e($profile['Latitude']) ?>" required>
+          <input type="hidden" name="longitude" id="longitude-input" value="<?= e($profile['Longitude']) ?>" required>
+
+          <!-- Interactive Map Container -->
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label small fw-semibold mb-0">
+                <i class="bi bi-pin-map-fill text-danger me-1"></i> Pin Your Location on Map
+              </label>
+              <span class="badge bg-light text-muted border font-monospace" id="pin-coords-badge">
+                Lat: <?= number_format((float)$profile['Latitude'], 4) ?>, Lng: <?= number_format((float)$profile['Longitude'], 4) ?>
+              </span>
             </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">Latitude</label>
-              <input type="number" step="0.000001" name="latitude" id="latitude-input" class="form-control" value="<?= e($profile['Latitude']) ?>" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">Longitude</label>
-              <input type="number" step="0.000001" name="longitude" id="longitude-input" class="form-control" value="<?= e($profile['Longitude']) ?>" required>
+            <div id="map-picker" style="height: 240px; width: 100%; border-radius: 8px; border: 1px solid #ced4da;" class="shadow-sm"></div>
+            <div class="form-text small text-muted mt-1 d-flex align-items-center gap-1">
+              <i class="bi bi-hand-index-thumb text-teal"></i> Tap anywhere on the map or drag the pin to adjust your position.
             </div>
           </div>
 
           <div id="location-feedback" class="small mb-4">
-            <span class="text-muted"><i class="bi bi-info-circle"></i> Accurate coordinates ensure doctor search results show the exact distance in km.</span>
+            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i> Current saved location: <?= e($profile['City']) ?>.</span>
           </div>
 
           <button type="submit" class="btn btn-teal px-4 py-2 fw-semibold">

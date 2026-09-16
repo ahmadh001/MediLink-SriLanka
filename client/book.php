@@ -98,7 +98,7 @@ try {
     $db->commit();
 
     setFlash('success', 'Appointment successfully reserved and locked! Booking Reference ID: #APT-' . str_pad($appointmentId, 5, '0', STR_PAD_LEFT));
-    redirect('client/appointments.php');
+    redirect('client/receipt.php?id=' . $appointmentId);
 
 } catch (Exception $e) {
     if ($db->inTransaction()) {

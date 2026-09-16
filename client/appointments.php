@@ -193,10 +193,12 @@ require_once __DIR__ . '/../includes/header.php';
                   <small class="text-secondary text-truncate d-inline-block" style="max-width: 150px;">
                     <?= e($apt['Notes'] ?: '—') ?>
                   </small>
-                </td>
-                <td class="text-end">
+                <td class="text-end text-nowrap">
+                  <a href="<?= url('client/receipt.php?id=' . $apt['Appointment_ID']) ?>" class="btn btn-outline-teal btn-sm me-1" title="View & Print Official Receipt">
+                    <i class="bi bi-receipt me-1"></i> Receipt
+                  </a>
                   <?php if (in_array($apt['Appt_Status'], ['BOOKED', 'CONFIRMED'])): ?>
-                    <form method="POST" action="<?= url('client/appointments.php') ?>" onsubmit="return confirm('Are you sure you want to cancel appointment #APT-<?= str_pad($apt['Appointment_ID'], 5, '0', STR_PAD_LEFT) ?>? Your quota will be restored.');">
+                    <form method="POST" action="<?= url('client/appointments.php') ?>" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel appointment #APT-<?= str_pad($apt['Appointment_ID'], 5, '0', STR_PAD_LEFT) ?>? Your quota will be restored.');">
                       <?= CSRF::inputField() ?>
                       <input type="hidden" name="action" value="cancel_appointment">
                       <input type="hidden" name="appointment_id" value="<?= $apt['Appointment_ID'] ?>">
@@ -204,8 +206,6 @@ require_once __DIR__ . '/../includes/header.php';
                         <i class="bi bi-x-circle me-1"></i> Cancel
                       </button>
                     </form>
-                  <?php else: ?>
-                    <span class="text-muted small">—</span>
                   <?php endif; ?>
                 </td>
               </tr>
