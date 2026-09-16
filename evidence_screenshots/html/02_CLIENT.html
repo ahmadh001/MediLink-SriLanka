@@ -1,0 +1,205 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Table: CLIENT | MediLink Database Evidence</title>
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #212529; padding: 25px; }
+        .card { border-radius: 10px; border: 1px solid #dee2e6; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .table thead th { background: #0f766e; color: #fff; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-key { background: #fef08a; color: #854d0e; font-weight: 700; border: 1px solid #fde047; }
+        .badge-fk { background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #bae6fd; }
+        .badge-uni { background: #fce7f3; color: #9d174d; font-weight: 700; border: 1px solid #fbcfe8; }
+        .code-pill { font-family: 'Consolas', monospace; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+      </style>
+    </head>
+    <body>
+      <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-dark fs-6">Table #2</span>
+              <h2 class="fw-bold mb-0 text-dark">`CLIENT`</h2>
+            </div>
+            <p class="text-muted mb-0 mt-1">Patient profile with date of birth, gender, and GPS geolocation coordinates.</p>
+          </div>
+          <div class="text-end">
+            <span class="badge bg-success fs-6"><i class="bi bi-database-check me-1"></i> MySQL (InnoDB)</span>
+            <div class="small text-muted mt-1">Database: <code>patient_doctor_booking</code></div>
+          </div>
+        </div>
+
+        <h5 class="fw-bold text-teal mb-2"><i class="bi bi-diagram-3-fill text-success me-2"></i> Table Schema & Column Specifications</h5>
+        <div class="table-responsive mb-4">
+          <table class="table table-sm table-bordered align-middle">
+            <thead>
+              <tr>
+                <th>Column Name</th>
+                <th>Data Type</th>
+                <th>Null</th>
+                <th>Key</th>
+                <th>Default</th>
+                <th>Extra</th>
+              </tr>
+            </thead>
+            <tbody>
+                              <tr>
+                  <td class="fw-bold">Client_ID</td>
+                  <td><code>int(11)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          <span class="badge badge-key">PRIMARY KEY</span>
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">auto_increment</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">User_ID</td>
+                  <td><code>int(11)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          <span class="badge badge-uni">UNIQUE</span>
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Date_of_Birth</td>
+                  <td><code>date</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Gender</td>
+                  <td><code>enum(&#039;MALE&#039;,&#039;FEMALE&#039;,&#039;OTHER&#039;)</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Address</td>
+                  <td><code>varchar(255)</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">City</td>
+                  <td><code>varchar(100)</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          <span class="badge badge-fk">INDEX / FK</span>
+                                      </td>
+                  <td>Colombo</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Latitude</td>
+                  <td><code>decimal(10,8)</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>6.92710000</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Longitude</td>
+                  <td><code>decimal(11,8)</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>79.86120000</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Created_At</td>
+                  <td><code>timestamp</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>current_timestamp()</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                          </tbody>
+          </table>
+        </div>
+
+        <h5 class="fw-bold text-teal mb-2"><i class="bi bi-table text-primary me-2"></i> Live Data Sample (First 2 Records)</h5>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped table-bordered align-middle font-monospace" style="font-size: 0.8rem;">
+            <thead class="table-dark">
+              <tr>
+                                  <th>Client_ID</th>
+                                  <th>User_ID</th>
+                                  <th>Date_of_Birth</th>
+                                  <th>Gender</th>
+                                  <th>Address</th>
+                                  <th>City</th>
+                                  <th>Latitude</th>
+                                  <th>Longitude</th>
+                                  <th>Created_At</th>
+                              </tr>
+            </thead>
+            <tbody>
+                              <tr>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      1                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      1990-05-15                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      MALE                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      45 Flower Road, Colombo 07                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Colombo                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      6.89610000                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      79.85720000                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2026-09-05 13:27:03                    </td>
+                                  </tr>
+                              <tr>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      3                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      1985-09-22                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      MALE                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      120 Peradeniya Road                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Kandy                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      7.28450000                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      80.62000000                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2026-09-05 13:27:03                    </td>
+                                  </tr>
+                          </tbody>
+          </table>
+        </div>
+      </div>
+    </body>
+    </html>
+    

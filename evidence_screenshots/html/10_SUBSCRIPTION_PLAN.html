@@ -1,0 +1,264 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Table: SUBSCRIPTION_PLAN | MediLink Database Evidence</title>
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #212529; padding: 25px; }
+        .card { border-radius: 10px; border: 1px solid #dee2e6; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .table thead th { background: #0f766e; color: #fff; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-key { background: #fef08a; color: #854d0e; font-weight: 700; border: 1px solid #fde047; }
+        .badge-fk { background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #bae6fd; }
+        .badge-uni { background: #fce7f3; color: #9d174d; font-weight: 700; border: 1px solid #fbcfe8; }
+        .code-pill { font-family: 'Consolas', monospace; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+      </style>
+    </head>
+    <body>
+      <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-3">
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-dark fs-6">Table #10</span>
+              <h2 class="fw-bold mb-0 text-dark">`SUBSCRIPTION_PLAN`</h2>
+            </div>
+            <p class="text-muted mb-0 mt-1">Tiered plans defining pricing in LKR, duration, monthly booking quotas, and search radii.</p>
+          </div>
+          <div class="text-end">
+            <span class="badge bg-success fs-6"><i class="bi bi-database-check me-1"></i> MySQL (InnoDB)</span>
+            <div class="small text-muted mt-1">Database: <code>patient_doctor_booking</code></div>
+          </div>
+        </div>
+
+        <h5 class="fw-bold text-teal mb-2"><i class="bi bi-diagram-3-fill text-success me-2"></i> Table Schema & Column Specifications</h5>
+        <div class="table-responsive mb-4">
+          <table class="table table-sm table-bordered align-middle">
+            <thead>
+              <tr>
+                <th>Column Name</th>
+                <th>Data Type</th>
+                <th>Null</th>
+                <th>Key</th>
+                <th>Default</th>
+                <th>Extra</th>
+              </tr>
+            </thead>
+            <tbody>
+                              <tr>
+                  <td class="fw-bold">Plan_ID</td>
+                  <td><code>int(11)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          <span class="badge badge-key">PRIMARY KEY</span>
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">auto_increment</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Plan_Name</td>
+                  <td><code>varchar(100)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Target_Role</td>
+                  <td><code>enum(&#039;CLIENT&#039;,&#039;PROVIDER&#039;,&#039;ALL&#039;)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>CLIENT</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Price</td>
+                  <td><code>decimal(10,2)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>0.00</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Duration_Days</td>
+                  <td><code>int(11)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>30</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Max_Book_per_Month</td>
+                  <td><code>int(11)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>5</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Search_Radius_KM</td>
+                  <td><code>int(11)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>10</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Description</td>
+                  <td><code>text</code></td>
+                  <td><span class="badge bg-light text-dark border">YES</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td><span class="text-muted">NULL</span></td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Status</td>
+                  <td><code>enum(&#039;ACTIVE&#039;,&#039;INACTIVE&#039;)</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          <span class="badge badge-fk">INDEX / FK</span>
+                                      </td>
+                  <td>ACTIVE</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                              <tr>
+                  <td class="fw-bold">Created_At</td>
+                  <td><code>timestamp</code></td>
+                  <td><span class="badge bg-light text-dark border">NO</span></td>
+                  <td>
+                                          -
+                                      </td>
+                  <td>current_timestamp()</td>
+                  <td><small class="text-muted">-</small></td>
+                </tr>
+                          </tbody>
+          </table>
+        </div>
+
+        <h5 class="fw-bold text-teal mb-2"><i class="bi bi-table text-primary me-2"></i> Live Data Sample (First 4 Records)</h5>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped table-bordered align-middle font-monospace" style="font-size: 0.8rem;">
+            <thead class="table-dark">
+              <tr>
+                                  <th>Plan_ID</th>
+                                  <th>Plan_Name</th>
+                                  <th>Target_Role</th>
+                                  <th>Price</th>
+                                  <th>Duration_Days</th>
+                                  <th>Max_Book_per_Month</th>
+                                  <th>Search_Radius_KM</th>
+                                  <th>Description</th>
+                                  <th>Status</th>
+                                  <th>Created_At</th>
+                              </tr>
+            </thead>
+            <tbody>
+                              <tr>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      1                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Basic Care Annual Plan                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      CLIENT                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      1000.00                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      365                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      1                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      10                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Ideal for individuals. 5 appointments per month and 10 km location radius. Billed annually.                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      ACTIVE                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2026-09-05 13:27:03                    </td>
+                                  </tr>
+                              <tr>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Standard Family Annual Plan                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      CLIENT                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2000.00                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      365                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      3                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      25                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Great for families. 15 appointments per month and 25 km extended search radius. Billed annually.                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      ACTIVE                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2026-09-05 13:27:03                    </td>
+                                  </tr>
+                              <tr>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      3                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Premium Platinum Annual Plan                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      CLIENT                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      4000.00                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      365                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      10                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      60                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Maximum flexibility. 30 appointments per month and island-wide 60 km search radius with priority support. Billed annually.                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      ACTIVE                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2026-09-05 13:27:03                    </td>
+                                  </tr>
+                              <tr>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      4                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Provider Professional Monthly Plan                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      PROVIDER                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      5000.00                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      30                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      100                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      100                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      Full verified directory listing, unlimited slots, and patient booking management. Billed monthly.                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      ACTIVE                    </td>
+                                      <td class="text-truncate" style="max-width: 250px;">
+                      2026-09-05 13:27:03                    </td>
+                                  </tr>
+                          </tbody>
+          </table>
+        </div>
+      </div>
+    </body>
+    </html>
+    
