@@ -29,9 +29,9 @@ $query = "
         a.Appointment_ID, a.Booking_DateTime, a.Status AS Appt_Status, a.Notes, a.Created_At,
         s.Slot_ID, s.Slot_Date, s.Start_Time, s.End_Time,
         c.Client_ID, cu.First_Name AS Patient_First, cu.Last_Name AS Patient_Last,
-        cu.Email AS Patient_Email, cu.Phone AS Patient_Phone, c.City AS Patient_City, c.Address AS Patient_Address,
+        cu.Email AS Patient_Email, cu.Phone AS Patient_Phone, cu.NIC_No AS Patient_NIC, c.City AS Patient_City, c.Address AS Patient_Address,
         p.Provider_ID, p.Provider_Type, p.Business_Name, p.Address AS Clinic_Address, p.City AS Clinic_City,
-        p.Contact_Number AS Clinic_Phone,
+        p.Contact_Number AS Clinic_Phone, p.Consultation_Fee,
         u.First_Name AS Doc_First, u.Last_Name AS Doc_Last,
         d.Medical_License_No, d.Consultation_Duration,
         hc.Centre_Name,
@@ -181,6 +181,10 @@ require_once __DIR__ . '/../includes/header.php';
             <span class="fw-semibold text-dark"><?= e($appt['Patient_Phone'] ?: 'Not Provided') ?></span>
           </div>
           <div class="mb-2">
+            <small class="text-muted d-block">National Identity (NIC)</small>
+            <span class="fw-semibold text-dark"><?= e($appt['Patient_NIC'] ?: 'Not Registered') ?></span>
+          </div>
+          <div class="mb-2">
             <small class="text-muted d-block">Email Address</small>
             <span class="fw-semibold text-dark"><?= e($appt['Patient_Email']) ?></span>
           </div>
@@ -274,12 +278,14 @@ require_once __DIR__ . '/../includes/header.php';
             <tr>
               <td>
                 <span class="fw-semibold">Specialist Doctor Clinical Consultation Fee</span><br>
-                <small class="text-muted">Hospital facility charge and medical specialist consultation fee</small>
+                <small class="text-muted">Doctor clinical examination and prescription fee (settled directly at counter)</small>
               </td>
               <td>
                 <span class="badge bg-light text-dark border">Payable at Clinic Reception</span>
               </td>
-              <td class="text-end text-muted fw-semibold">Settled at Clinic</td>
+              <td class="text-end fw-bold text-dark">
+                <?= $appt['Consultation_Fee'] > 0 ? 'Rs. ' . number_format($appt['Consultation_Fee'], 2) : 'Settled at Clinic' ?>
+              </td>
             </tr>
             <tr class="table-light">
               <td colspan="2" class="fw-bold text-dark text-end">Total Amount Paid Online:</td>

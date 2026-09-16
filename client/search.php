@@ -49,7 +49,7 @@ $offset = ($page - 1) * $perPage;
 
 // Base Search Query using Haversine Distance Formula in SQL
 $sql = "
-    SELECT p.Provider_ID, p.Provider_Type, p.Business_Name, p.Address, p.City, p.Latitude, p.Longitude,
+    SELECT p.Provider_ID, p.Provider_Type, p.Business_Name, p.Address, p.City, p.Latitude, p.Longitude, p.Consultation_Fee,
            p.Contact_Number, p.Description, p.Verification_Status,
            d.Doctor_ID, d.Medical_License_No, d.Experience_Years, d.Consultation_Duration,
            u.First_Name, u.Last_Name,
@@ -270,12 +270,20 @@ require_once __DIR__ . '/../includes/header.php';
               <strong>Speciality:</strong> <?= e($p['Specializations'] ?: 'General Consultations') ?>
             </p>
 
-            <div class="small text-secondary mb-3 d-flex justify-content-between align-items-start">
+            <div class="small text-secondary mb-2 d-flex justify-content-between align-items-start">
               <span><i class="bi bi-geo-alt me-1"></i> <?= e($p['Address']) ?>, <?= e($p['City']) ?></span>
               <a href="https://www.google.com/maps/dir/?api=1&destination=<?= $p['Latitude'] ?>,<?= $p['Longitude'] ?>" target="_blank" rel="noopener noreferrer" class="text-teal small fw-semibold text-decoration-none ms-2 text-nowrap" title="Directions on Google Maps">
                 <i class="bi bi-map-fill me-1"></i> Map
               </a>
             </div>
+
+            <?php if ($p['Consultation_Fee'] > 0): ?>
+              <div class="small mb-3">
+                <span class="text-muted">Est. Clinic Fee:</span>
+                <span class="fw-bold text-dark">Rs. <?= number_format($p['Consultation_Fee'], 2) ?></span>
+                <span class="text-muted" style="font-size: 0.75rem;">(Settled at clinic)</span>
+              </div>
+            <?php endif; ?>
 
             <!-- Available Slots Indicator -->
             <div class="mt-auto pt-3 border-top d-flex justify-content-between align-items-center">

@@ -29,7 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $firstName = trim($_POST['first_name'] ?? '');
         $lastName = trim($_POST['last_name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
+        $nicNo = trim($_POST['nic_no'] ?? '');
         $businessName = trim($_POST['business_name'] ?? '');
+        $consultationFee = max(0, floatval($_POST['consultation_fee'] ?? 0.00));
         $address = trim($_POST['address'] ?? '');
         $city = trim($_POST['city'] ?? 'Colombo');
         $latitude = floatval($_POST['latitude'] ?? 6.9271);
@@ -40,16 +42,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->beginTransaction();
 
             // Update USER
-            $uStmt = $db->prepare("UPDATE `USER` SET First_Name = ?, Last_Name = ?, Phone = ? WHERE User_ID = ?");
-            $uStmt->execute([$firstName, $lastName, $phone, $userId]);
+            $uStmt = $db->prepare("UPDATE `USER` SET First_Name = ?, Last_Name = ?, Phone = ?, NIC_No = ? WHERE User_ID = ?");
+            $uStmt->execute([$firstName, $lastName, $phone, $nicNo ?: null, $userId]);
 
             // Update PROVIDER
             $pStmt = $db->prepare("
                 UPDATE `PROVIDER` 
-                SET Business_Name = ?, Address = ?, City = ?, Latitude = ?, Longitude = ?, Contact_Number = ?, Description = ?
+                SET Business_Name = ?, Address = ?, City = ?, Latitude = ?, Longitude = ?, Consultation_Fee = ?, Contact_Number = ?, Description = ?
                 WHERE Provider_ID = ?
             ");
-            $pStmt->execute([$businessName, $address, $city, $latitude, $longitude, $phone, $description, $providerId]);
+            $pStmt->execute([$businessName, $address, $city, $latitude, $longitude, $consultationFee, $phone, $description, $providerId]);
 
             if ($providerType === PROVIDER_DOCTOR) {
                 $licenseNo = trim($_POST['medical_license_no'] ?? '');
@@ -194,19 +196,29 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
 
           <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="form-label small fw-semibold">Email Address (Read-only)</label>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Email (Read-only)</label>
               <input type="email" class="form-control bg-light" value="<?= e($userData['Email']) ?>" readonly>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label small fw-semibold">Contact Phone Number</label>
               <input type="tel" name="phone" class="form-control" value="<?= e($userData['Phone']) ?>" required>
             </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">National Identity (NIC No)</label>
+              <input type="text" name="nic_no" class="form-control" placeholder="198012345678" value="<?= e($userData['NIC_No'] ?? '') ?>">
+            </div>
           </div>
 
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Public Practice / Hospital / Business Name</label>
-            <input type="text" name="business_name" class="form-control" value="<?= e($provData['Business_Name']) ?>" required>
+          <div class="row g-3 mb-3">
+            <div class="col-md-8">
+              <label class="form-label small fw-semibold">Public Practice / Hospital / Business Name</label>
+              <input type="text" name="business_name" class="form-control" value="<?= e($provData['Business_Name']) ?>" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Estimated Consultation Fee (LKR)</label>
+              <input type="number" name="consultation_fee" class="form-control" min="0" step="100" value="<?= e($provData['Consultation_Fee']) ?>">
+            </div>
           </div>
 
           <?php if ($providerType === PROVIDER_DOCTOR && $docData): ?>

@@ -29,8 +29,10 @@ $form = [
     'last_name'  => '',
     'email'      => '',
     'phone'      => '',
+    'nic_no'     => '',
     'role_type'  => $roleType,
     'provider_type' => $_POST['provider_type'] ?? 'DOCTOR',
+    'consultation_fee' => 2000.00,
     // Client fields
     'dob'        => '',
     'gender'     => 'MALE',
@@ -59,10 +61,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['last_name']  = trim($_POST['last_name'] ?? '');
     $form['email']      = trim($_POST['email'] ?? '');
     $form['phone']      = trim($_POST['phone'] ?? '');
+    $form['nic_no']     = trim($_POST['nic_no'] ?? '');
     $password           = $_POST['password'] ?? '';
     $password_confirm   = $_POST['password_confirm'] ?? '';
     $form['role_type']  = $_POST['role_type'] ?? 'CLIENT';
     $form['provider_type'] = $_POST['provider_type'] ?? 'DOCTOR';
+    $form['consultation_fee'] = max(0, floatval($_POST['consultation_fee'] ?? 2000.00));
     $form['address']    = trim($_POST['address'] ?? '');
     $form['city']       = trim($_POST['city'] ?? 'Colombo');
     $form['latitude']   = floatval($_POST['latitude'] ?? 6.9271);
@@ -143,8 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Insert USER
             $userStmt = $db->prepare("
-                INSERT INTO `USER` (Email, Password_Hash, First_Name, Last_Name, Phone, Role_Type, Account_Status)
-                VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')
+                INSERT INTO `USER` (Email, Password_Hash, First_Name, Last_Name, Phone, NIC_No, Role_Type, Account_Status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
             ");
             $userStmt->execute([
                 $form['email'],
@@ -152,6 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $form['first_name'],
                 $form['last_name'],
                 $form['phone'],
+                $form['nic_no'] ?: null,
                 $form['role_type']
             ]);
             $userId = (int)$db->lastInsertId();
@@ -177,8 +182,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Insert PROVIDER
                 $provStmt = $db->prepare("
-                    INSERT INTO `PROVIDER` (User_ID, Provider_Type, Business_Name, Address, City, Latitude, Longitude, Contact_Number, Description, Verification_Status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'VERIFIED')
+                    INSERT INTO `PROVIDER` (User_ID, Provider_Type, Business_Name, Address, City, Latitude, Longitude, Consultation_Fee, Contact_Number, Description, Verification_Status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'VERIFIED')
                 ");
                 $provStmt->execute([
                     $userId,
@@ -188,6 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $form['city'],
                     $form['latitude'],
                     $form['longitude'],
+                    $form['consultation_fee'],
                     $form['phone'],
                     ($provType === 'DOCTOR' ? $form['bio'] : $form['centre_description'])
                 ]);
@@ -323,13 +329,17 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
 
           <div class="row g-3 mb-3">
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label small fw-semibold">Email Address *</label>
               <input type="email" name="email" class="form-control" value="<?= e($form['email']) ?>" required>
             </div>
-            <div class="col-md-6">
-              <label class="form-label small fw-semibold">Phone Number (Sri Lanka) *</label>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Phone (Sri Lanka) *</label>
               <input type="tel" name="phone" class="form-control" placeholder="0771234567" value="<?= e($form['phone']) ?>" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">National Identity (NIC No)</label>
+              <input type="text" name="nic_no" class="form-control" placeholder="e.g. 199512345678" value="<?= e($form['nic_no']) ?>">
             </div>
           </div>
 
@@ -380,13 +390,17 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
 
             <div class="row g-3 mb-3">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label class="form-label small fw-semibold">Years of Experience</label>
                 <input type="number" name="experience_years" class="form-control" min="0" max="60" value="<?= e($form['experience_years']) ?>">
               </div>
-              <div class="col-md-6">
-                <label class="form-label small fw-semibold">Consultation Duration (Minutes)</label>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Consultation Duration</label>
                 <input type="number" name="consultation_duration" class="form-control" min="10" max="120" step="5" value="<?= e($form['consultation_duration']) ?>">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Consultation Fee (LKR)</label>
+                <input type="number" name="consultation_fee" class="form-control" min="0" step="100" placeholder="2500" value="<?= e($form['consultation_fee']) ?>">
               </div>
             </div>
 
@@ -417,13 +431,17 @@ require_once __DIR__ . '/../includes/header.php';
             <hr class="my-4">
             <h6 class="text-teal fw-bold mb-3"><i class="bi bi-hospital-fill me-2"></i> Healthcare Facility Details</h6>
             <div class="row g-3 mb-3">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label class="form-label small fw-semibold">Centre / Hospital Name *</label>
                 <input type="text" name="centre_name" class="form-control" placeholder="e.g. Asiri MediCare Complex" value="<?= e($form['centre_name']) ?>">
               </div>
-              <div class="col-md-6">
-                <label class="form-label small fw-semibold">PHSRC / Ministry Registration No *</label>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">PHSRC / Ministry Reg No *</label>
                 <input type="text" name="registration_no" class="form-control" placeholder="e.g. PHSRC/HC/2024/092" value="<?= e($form['registration_no']) ?>">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Base Facility Fee (LKR)</label>
+                <input type="number" name="consultation_fee" class="form-control" min="0" step="100" placeholder="1500" value="<?= e($form['consultation_fee']) ?>">
               </div>
             </div>
             <div class="mb-3">

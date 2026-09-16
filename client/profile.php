@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $firstName = trim($_POST['first_name'] ?? '');
         $lastName = trim($_POST['last_name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
+        $nicNo = trim($_POST['nic_no'] ?? '');
         $dob = $_POST['dob'] ?: null;
         $gender = $_POST['gender'] ?? 'OTHER';
         $address = trim($_POST['address'] ?? '');
@@ -35,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $db->beginTransaction();
 
-            $uStmt = $db->prepare("UPDATE `USER` SET First_Name = ?, Last_Name = ?, Phone = ? WHERE User_ID = ?");
-            $uStmt->execute([$firstName, $lastName, $phone, $userId]);
+            $uStmt = $db->prepare("UPDATE `USER` SET First_Name = ?, Last_Name = ?, Phone = ?, NIC_No = ? WHERE User_ID = ?");
+            $uStmt->execute([$firstName, $lastName, $phone, $nicNo ?: null, $userId]);
 
             $cStmt = $db->prepare("UPDATE `CLIENT` SET Date_of_Birth = ?, Gender = ?, Address = ?, City = ?, Latitude = ?, Longitude = ? WHERE Client_ID = ?");
             $cStmt->execute([$dob, $gender, $address, $city, $latitude, $longitude, $clientId]);
@@ -120,13 +121,17 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
 
           <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="form-label small fw-semibold">Email Address (Read-only)</label>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Email (Read-only)</label>
               <input type="email" class="form-control bg-light" value="<?= e($profile['Email']) ?>" readonly>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label small fw-semibold">Phone Number</label>
               <input type="tel" name="phone" class="form-control" value="<?= e($profile['Phone']) ?>" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">National Identity (NIC No)</label>
+              <input type="text" name="nic_no" class="form-control" placeholder="e.g. 199012345678" value="<?= e($profile['NIC_No'] ?? '') ?>">
             </div>
           </div>
 

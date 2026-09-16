@@ -31,6 +31,7 @@ CREATE TABLE `USER` (
   `First_Name` VARCHAR(100) NOT NULL,
   `Last_Name` VARCHAR(100) NOT NULL,
   `Phone` VARCHAR(30) NOT NULL,
+  `NIC_No` VARCHAR(20) NULL,
   `Role_Type` ENUM('CLIENT', 'PROVIDER', 'SYSTEM_ADMIN') NOT NULL,
   `Account_Status` ENUM('ACTIVE', 'SUSPENDED', 'PENDING') NOT NULL DEFAULT 'ACTIVE',
   `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -65,6 +66,7 @@ CREATE TABLE `PROVIDER` (
   `City` VARCHAR(100) NOT NULL,
   `Latitude` DECIMAL(10, 8) NOT NULL DEFAULT 6.92710000,
   `Longitude` DECIMAL(11, 8) NOT NULL DEFAULT 79.86120000,
+  `Consultation_Fee` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
   `Contact_Number` VARCHAR(30) NOT NULL,
   `Description` TEXT NULL,
   `Verification_Status` ENUM('PENDING', 'VERIFIED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
@@ -256,23 +258,23 @@ INSERT INTO `SUBSCRIPTION_PLAN` (`Plan_ID`, `Plan_Name`, `Target_Role`, `Price`,
 
 -- Demo Users (Password: Password123!)
 -- Bcrypt Hash: $2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u
-INSERT INTO `USER` (`User_ID`, `Email`, `Password_Hash`, `First_Name`, `Last_Name`, `Phone`, `Role_Type`, `Account_Status`) VALUES
+INSERT INTO `USER` (`User_ID`, `Email`, `Password_Hash`, `First_Name`, `Last_Name`, `Phone`, `NIC_No`, `Role_Type`, `Account_Status`) VALUES
 -- 1: System Admin
-(1, 'admin@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Kasun', 'Perera', '0771234567', 'SYSTEM_ADMIN', 'ACTIVE'),
+(1, 'admin@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Kasun', 'Perera', '0771234567', '198012345678', 'SYSTEM_ADMIN', 'ACTIVE'),
 -- 2: Client with Active Subscription (Colombo)
-(2, 'client@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Nimal', 'Silva', '0777654321', 'CLIENT', 'ACTIVE'),
+(2, 'client@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Nimal', 'Silva', '0777654321', '199214502391', 'CLIENT', 'ACTIVE'),
 -- 3: Client with Expired Subscription (Kandy)
-(3, 'expired.client@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Sunil', 'Fernando', '0712345678', 'CLIENT', 'ACTIVE'),
+(3, 'expired.client@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Sunil', 'Fernando', '0712345678', '198829301928', 'CLIENT', 'ACTIVE'),
 -- 4: Doctor (Cardiologist in Colombo)
-(4, 'doctor@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Ruwan', 'Jayasinghe', '0779876543', 'PROVIDER', 'ACTIVE'),
+(4, 'doctor@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Ruwan', 'Jayasinghe', '0779876543', '197548201948', 'PROVIDER', 'ACTIVE'),
 -- 5: Doctor (Pediatrician in Kandy)
-(5, 'pediatrician@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Anoma', 'Weerasinghe', '0765432109', 'PROVIDER', 'ACTIVE'),
+(5, 'pediatrician@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Anoma', 'Weerasinghe', '0765432109', '198129402910', 'PROVIDER', 'ACTIVE'),
 -- 6: Doctor (Dermatologist in Negombo)
-(6, 'dermatologist@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Chaminda', 'Bandara', '0751239876', 'PROVIDER', 'ACTIVE'),
+(6, 'dermatologist@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Chaminda', 'Bandara', '0751239876', '197938491029', 'PROVIDER', 'ACTIVE'),
 -- 7: Healthcare Centre (Colombo 07)
-(7, 'centre@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Lanka Care', 'Medical Centre', '0112345678', 'PROVIDER', 'ACTIVE'),
+(7, 'centre@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Lanka Care', 'Medical Centre', '0112345678', '198429102948', 'PROVIDER', 'ACTIVE'),
 -- 8: Healthcare Centre (Kandy)
-(8, 'kandy.centre@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Suwasevana', 'Health Complex', '0812233445', 'PROVIDER', 'ACTIVE');
+(8, 'kandy.centre@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Suwasevana', 'Health Complex', '0812233445', '198739102938', 'PROVIDER', 'ACTIVE');
 
 -- Client Profiles
 INSERT INTO `CLIENT` (`Client_ID`, `User_ID`, `Date_of_Birth`, `Gender`, `Address`, `City`, `Latitude`, `Longitude`) VALUES
@@ -280,17 +282,17 @@ INSERT INTO `CLIENT` (`Client_ID`, `User_ID`, `Date_of_Birth`, `Gender`, `Addres
 (2, 3, '1985-09-22', 'MALE', '120 Peradeniya Road', 'Kandy', 7.28450000, 80.62000000);
 
 -- Provider Base Profiles
-INSERT INTO `PROVIDER` (`Provider_ID`, `User_ID`, `Provider_Type`, `Business_Name`, `Address`, `City`, `Latitude`, `Longitude`, `Contact_Number`, `Description`, `Verification_Status`) VALUES
+INSERT INTO `PROVIDER` (`Provider_ID`, `User_ID`, `Provider_Type`, `Business_Name`, `Address`, `City`, `Latitude`, `Longitude`, `Consultation_Fee`, `Contact_Number`, `Description`, `Verification_Status`) VALUES
 -- Doctor 1 (Dr. Ruwan - Colombo)
-(1, 4, 'DOCTOR', 'Dr. Ruwan Jayasinghe Cardiology Clinic', '75 Ward Place', 'Colombo', 6.91820000, 79.86850000, '0779876543', 'Consultant Cardiologist with over 15 years experience in adult cardiology, hypertension, and preventive cardiology.', 'VERIFIED'),
+(1, 4, 'DOCTOR', 'Dr. Ruwan Jayasinghe Cardiology Clinic', '75 Ward Place', 'Colombo', 6.91820000, 79.86850000, 2500.00, '0779876543', 'Consultant Cardiologist with over 15 years experience in adult cardiology, hypertension, and preventive cardiology.', 'VERIFIED'),
 -- Doctor 2 (Dr. Anoma - Kandy)
-(2, 5, 'DOCTOR', 'Dr. Anoma Weerasinghe Child Care', '28 William Gopallawa Mawatha', 'Kandy', 7.28900000, 80.63000000, '0765432109', 'Senior Consultant Pediatrician dedicated to holistic child wellness, growth tracking, and childhood illnesses.', 'VERIFIED'),
+(2, 5, 'DOCTOR', 'Dr. Anoma Weerasinghe Child Care', '28 William Gopallawa Mawatha', 'Kandy', 7.28900000, 80.63000000, 2200.00, '0765432109', 'Senior Consultant Pediatrician dedicated to holistic child wellness, growth tracking, and childhood illnesses.', 'VERIFIED'),
 -- Doctor 3 (Dr. Chaminda - Negombo)
-(3, 6, 'DOCTOR', 'Dr. Chaminda Skin & Laser Clinic', '88 Main Street', 'Negombo', 7.20850000, 79.83900000, '0751239876', 'Specialist Dermatologist offering clinical dermatology, eczema treatments, and aesthetic skincare.', 'VERIFIED'),
+(3, 6, 'DOCTOR', 'Dr. Chaminda Skin & Laser Clinic', '88 Main Street', 'Negombo', 7.20850000, 79.83900000, 2000.00, '0751239876', 'Specialist Dermatologist offering clinical dermatology, eczema treatments, and aesthetic skincare.', 'VERIFIED'),
 -- Centre 1 (Lanka Care - Colombo)
-(4, 7, 'HEALTHCARE_CENTRE', 'Lanka Care Specialist Medical Centre', '142 Horton Place', 'Colombo', 6.91450000, 79.87300000, '0112345678', 'Multi-specialty primary care and diagnostic centre with modern laboratory and outpatient consulting rooms.', 'VERIFIED'),
+(4, 7, 'HEALTHCARE_CENTRE', 'Lanka Care Specialist Medical Centre', '142 Horton Place', 'Colombo', 6.91450000, 79.87300000, 1500.00, '0112345678', 'Multi-specialty primary care and diagnostic centre with modern laboratory and outpatient consulting rooms.', 'VERIFIED'),
 -- Centre 2 (Suwasevana - Kandy)
-(5, 8, 'HEALTHCARE_CENTRE', 'Suwasevana Health Complex', '50 Peradeniya Road', 'Kandy', 7.28650000, 80.62500000, '0812233445', 'Central Province flagship clinical care facility with 24/7 specialist doctor consultation suites.', 'VERIFIED');
+(5, 8, 'HEALTHCARE_CENTRE', 'Suwasevana Health Complex', '50 Peradeniya Road', 'Kandy', 7.28650000, 80.62500000, 1800.00, '0812233445', 'Central Province flagship clinical care facility with 24/7 specialist doctor consultation suites.', 'VERIFIED');
 
 -- Doctor Specific Records
 INSERT INTO `DOCTOR` (`Doctor_ID`, `Provider_ID`, `Medical_License_No`, `Professional_Bio`, `Experience_Years`, `Consultation_Duration`, `Verification_Status`) VALUES
