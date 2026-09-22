@@ -1,7 +1,5 @@
 <?php
-/**
- * Database Connection using PHP PDO (Prepared Statements & Singleton Pattern)
- */
+
 
 require_once __DIR__ . '/constants.php';
 
@@ -23,7 +21,7 @@ class Database {
             try {
                 self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
             } catch (PDOException $e) {
-                // In production, write to logs without exposing raw credentials
+                
                 error_log("Database Connection Error: " . $e->getMessage());
                 die("<div style='font-family:sans-serif;padding:2rem;text-align:center;'>
                         <h2 style='color:#dc3545;'>Database Connection Error</h2>

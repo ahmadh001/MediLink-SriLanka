@@ -1,7 +1,5 @@
 <?php
-/**
- * Client / Patient Dashboard
- */
+
 
 $pageTitle = 'Patient Dashboard';
 require_once __DIR__ . '/../config/database.php';
@@ -17,17 +15,17 @@ $clientId = $currentUser['client_id'];
 
 $db = Database::getConnection();
 
-// Fetch Client Profile
+
 $cStmt = $db->prepare("SELECT c.*, u.First_Name, u.Last_Name, u.Email, u.Phone FROM `CLIENT` c JOIN `USER` u ON c.User_ID = u.User_ID WHERE c.Client_ID = ?");
 $cStmt->execute([$clientId]);
 $client = $cStmt->fetch();
 
-// Check Subscription & Quota
+
 $hasSub = hasActiveSubscription($userId);
 $activeSub = getUserActiveSubscription($userId);
 $quota = getMonthlyBookingQuota($clientId, $userId);
 
-// Fetch Upcoming Appointments (Booked / Confirmed)
+
 $upcomingStmt = $db->prepare("
     SELECT a.Appointment_ID, a.Booking_DateTime, a.Status AS Appt_Status, a.Notes,
            s.Slot_Date, s.Start_Time, s.End_Time,
@@ -43,197 +41,134 @@ $upcomingStmt = $db->prepare("
     LEFT JOIN `HEALTHCARE_CENTRE` hc ON p.Provider_ID = hc.Provider_ID
     WHERE a.Client_ID = ?
       AND s.Slot_Date >= CURRENT_DATE
-      AND a.Status IN ('BOOKED', 'CONFIRMED')
+      AND a.Status IN ('PENDING', 'BOOKED', 'CONFIRMED')
     ORDER BY s.Slot_Date ASC, s.Start_Time ASC
     LIMIT 5
 ");
 $upcomingStmt->execute([$clientId]);
 $upcomingAppointments = $upcomingStmt->fetchAll();
 
-// Fetch Specializations for Quick Search
+
 $specializations = $db->query("SELECT * FROM `SPECIALIZATION` ORDER BY Name ASC")->fetchAll();
 $cities = getSriLankanCities();
 
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="container py-4">
-  <!-- Welcome Banner -->
-  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+<div class="container py-4 py-lg-5 client-dashboard-v2">
+  <section class="client-dash-head mb-4">
     <div>
-      <h2 class="fw-bold mb-1"><?= getTimeBasedGreeting() ?>, <?= e($client['First_Name']) ?>!</h2>
-      <p class="text-muted small mb-0">
-        <i class="bi bi-geo-alt-fill text-danger me-1"></i> <?= e($client['City']) ?>, Sri Lanka • 
-        <span>Patient ID: #CL-<?= str_pad($clientId, 4, '0', STR_PAD_LEFT) ?></span>
-      </p>
+      <span class="client-dash-kicker"><i class="bi bi-grid-1x2"></i> Patient dashboard</span>
+      <h1 class="client-dash-title mb-1"><?= getTimeBasedGreeting() ?>, <?= e($client['First_Name']) ?></h1>
+      <p class="client-dash-sub mb-0"><i class="bi bi-geo-alt"></i> <?= e($client['City']) ?>, Sri Lanka <span aria-hidden="true">·</span> Patient ID #CL-<?= str_pad($clientId, 4, '0', STR_PAD_LEFT) ?></p>
     </div>
-    <div class="d-flex gap-2">
-      <a href="<?= url('client/search.php') ?>" class="btn btn-teal">
-        <i class="bi bi-search me-1"></i> Find Doctors
-      </a>
-      <a href="<?= url('client/appointments.php') ?>" class="btn btn-outline-secondary">
-        <i class="bi bi-calendar-check me-1"></i> My Appointments
-      </a>
-    </div>
-  </div>
+    <a href="<?= url('client/search.php') ?>" class="btn btn-teal client-dash-primary"><i class="bi bi-search"></i> Find Doctors</a>
+  </section>
 
-  <!-- Subscription Status Banner / Warning if Expired -->
   <?php if (!$hasSub): ?>
-    <div class="alert alert-warning border-warning d-flex justify-content-between align-items-center shadow-sm mb-4 p-3 rounded-3" role="alert">
-      <div>
-        <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-2"></i>
-        <strong>Subscription Expired / Inactive:</strong> You need an active subscription plan to search providers within your GPS radius and book appointments.
-      </div>
-      <a href="<?= url('client/subscription.php') ?>" class="btn btn-teal btn-sm fw-bold">Choose a Plan Now</a>
+    <div class="client-sub-alert mb-4" role="alert">
+      <div class="client-sub-alert-icon"><i class="bi bi-exclamation-circle"></i></div>
+      <div class="flex-grow-1"><strong>No active subscription</strong><p class="mb-0">Choose a plan to use plan-based search radius and appointment booking features.</p></div>
+      <a href="<?= url('client/subscription.php') ?>" class="btn btn-sm btn-teal">View plans</a>
     </div>
   <?php endif; ?>
 
-  <!-- Subscription & Quota Card -->
   <div class="row g-4 mb-4">
     <div class="col-lg-7">
-      <div class="card card-custom p-4 h-100">
-        <div class="d-flex justify-content-between align-items-start mb-3">
-          <div>
-            <span class="badge <?= $hasSub ? 'bg-success' : 'bg-danger' ?> mb-2">
-              <?= $hasSub ? 'ACTIVE MEMBERSHIP' : 'NO ACTIVE PLAN' ?>
-            </span>
-            <h4 class="fw-bold mb-0 text-teal"><?= e($quota['plan_name']) ?></h4>
+      <section class="client-next-card h-100" aria-labelledby="nextAppointmentTitle">
+        <div class="client-card-label"><i class="bi bi-calendar2-check"></i> Next appointment</div>
+        <?php if (!empty($upcomingAppointments)): $next = $upcomingAppointments[0]; ?>
+          <div class="client-next-main">
+            <div class="client-date-block">
+              <span><?= strtoupper(date('M', strtotime($next['Slot_Date']))) ?></span>
+              <strong><?= date('d', strtotime($next['Slot_Date'])) ?></strong>
+            </div>
+            <div class="min-w-0">
+              <h2 id="nextAppointmentTitle" class="client-next-name"><?= $next['Doc_First'] ? 'Dr. ' . e($next['Doc_First'] . ' ' . $next['Doc_Last']) : e($next['Centre_Name'] ?: $next['Business_Name']) ?></h2>
+              <p class="client-next-provider mb-0"><?= e($next['Business_Name']) ?></p>
+            </div>
           </div>
-          <a href="<?= url('client/subscription.php') ?>" class="btn btn-outline-teal btn-sm">
-            <?= $hasSub ? 'Manage / Renew' : 'Subscribe' ?>
-          </a>
-        </div>
-
-        <?php if ($hasSub && $activeSub): ?>
-          <div class="row g-2 mb-3 text-center">
-            <div class="col-4">
-              <div class="bg-light p-2 rounded-3 border">
-                <small class="text-muted d-block">Search Radius</small>
-                <strong class="text-teal"><?= $activeSub['Search_Radius_KM'] ?> km</strong>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="bg-light p-2 rounded-3 border">
-                <small class="text-muted d-block">Monthly Allowance</small>
-                <strong><?= $quota['limit'] ?> Bookings</strong>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="bg-light p-2 rounded-3 border">
-                <small class="text-muted d-block">Days Remaining</small>
-                <strong class="text-dark"><?= $quota['days_remaining'] ?> Days</strong>
-              </div>
-            </div>
+          <div class="client-next-meta">
+            <span><i class="bi bi-clock"></i><?= formatTime($next['Start_Time']) ?> – <?= formatTime($next['End_Time']) ?></span>
+            <span><i class="bi bi-geo-alt"></i><?= e($next['Provider_City']) ?></span>
+            <span><i class="bi bi-check-circle"></i><?= e(ucfirst(strtolower($next['Appt_Status']))) ?></span>
+          </div>
+          <div class="client-next-actions">
+            <a href="<?= url('client/appointments.php') ?>" class="btn btn-outline-teal btn-sm"><i class="bi bi-eye"></i> View appointment</a>
+            <?php if (!empty($next['Contact_Number'])): ?><a href="tel:<?= e($next['Contact_Number']) ?>" class="btn btn-light btn-sm"><i class="bi bi-telephone"></i> Contact provider</a><?php endif; ?>
+          </div>
+        <?php else: ?>
+          <div class="client-empty-next">
+            <div class="client-empty-icon"><i class="bi bi-calendar-plus"></i></div>
+            <h2 id="nextAppointmentTitle">No upcoming appointment</h2>
+            <p>Your schedule is clear. Search available providers when you need your next appointment.</p>
+            <a href="<?= url('client/search.php') ?>" class="btn btn-teal btn-sm"><i class="bi bi-search"></i> Find available care</a>
           </div>
         <?php endif; ?>
-
-        <!-- Monthly Quota Meter -->
-        <div class="pt-2">
-          <div class="d-flex justify-content-between small fw-semibold mb-1">
-            <span>Monthly Booking Quota (<?= date('F Y') ?>):</span>
-            <span class="text-teal fw-bold"><?= $quota['used'] ?> of <?= $quota['limit'] ?> used (<?= $quota['remaining'] ?> remaining)</span>
-          </div>
-          <div class="progress quota-progress mb-2">
-            <?php 
-              $pct = ($quota['limit'] > 0) ? min(100, round(($quota['used'] / $quota['limit']) * 100)) : 0;
-              $barCls = ($pct >= 90) ? 'bg-danger' : (($pct >= 70) ? 'bg-warning' : 'bg-teal');
-            ?>
-            <div class="progress-bar <?= $barCls ?>" role="progressbar" style="width: <?= $pct ?>%;"></div>
-          </div>
-          <small class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-info-circle"></i> Booking quota resets on the 1st of every month.</small>
-        </div>
-      </div>
+      </section>
     </div>
 
-    <!-- Quick Search Card -->
     <div class="col-lg-5">
-      <div class="card card-custom p-4 bg-light h-100 border-0">
-        <h5 class="fw-bold mb-3 text-teal"><i class="bi bi-search me-2"></i> Find Nearby Care</h5>
-        <form action="<?= url('client/search.php') ?>" method="GET">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold">Specialization</label>
-            <select name="specialization_id" class="form-select">
-              <option value="">All Specializations</option>
-              <?php foreach ($specializations as $sp): ?>
-                <option value="<?= $sp['Specialization_ID'] ?>"><?= e($sp['Name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">City</label>
-            <select name="city" class="form-select">
-              <option value="">All Sri Lankan Cities</option>
-              <?php foreach (array_keys($cities) as $cName): ?>
-                <option value="<?= $cName ?>" <?= ($client['City'] === $cName) ? 'selected' : '' ?>><?= $cName ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-
-          <button type="submit" class="btn btn-teal w-100 py-2 fw-semibold">
-            <i class="bi bi-geo-alt-fill me-1"></i> Search Within My Radius (<?= $hasSub ? $activeSub['Search_Radius_KM'] . 'km' : '5km' ?>)
-          </button>
-        </form>
-      </div>
+      <section class="client-plan-card h-100">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+          <div><div class="client-card-label"><i class="bi bi-wallet2"></i> Plan & quota</div><h2 class="client-plan-name mb-1"><?= e($quota['plan_name']) ?></h2></div>
+          <span class="client-plan-state <?= $hasSub ? 'is-active' : 'is-inactive' ?>"><?= $hasSub ? 'Active' : 'Inactive' ?></span>
+        </div>
+        <div class="client-quota-row"><strong><?= (int)$quota['remaining'] ?></strong><span>bookings remaining this month</span></div>
+        <?php $pct = ($quota['limit'] > 0) ? min(100, round(($quota['used'] / $quota['limit']) * 100)) : 0; ?>
+        <div class="progress client-quota-progress" role="progressbar" aria-label="Monthly booking quota" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width:<?= $pct ?>%"></div></div>
+        <div class="client-plan-stats">
+          <div><span>Used</span><strong><?= (int)$quota['used'] ?> / <?= (int)$quota['limit'] ?></strong></div>
+          <div><span>Search radius</span><strong><?= ($hasSub && $activeSub) ? e($activeSub['Search_Radius_KM']) . ' km' : '—' ?></strong></div>
+          <div><span>Days left</span><strong><?= $hasSub ? (int)$quota['days_remaining'] : '—' ?></strong></div>
+        </div>
+        <div class="client-plan-foot"><small><i class="bi bi-arrow-repeat"></i> Booking quota resets monthly.</small><a href="<?= url('client/subscription.php') ?>">Manage plan <i class="bi bi-arrow-right"></i></a></div>
+      </section>
     </div>
   </div>
 
-  <!-- Upcoming Appointments -->
-  <div class="card card-custom p-4 mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5 class="fw-bold mb-0"><i class="bi bi-calendar-event text-teal me-2"></i> Your Upcoming Appointments</h5>
-      <a href="<?= url('client/appointments.php') ?>" class="btn btn-outline-secondary btn-sm">Full History</a>
+  <section class="client-quick-section mb-4">
+    <div class="client-section-head"><div><span class="client-card-label"><i class="bi bi-lightning-charge"></i> Quick actions</span><h2>What would you like to do?</h2></div></div>
+    <div class="row g-3">
+      <div class="col-6 col-lg-3"><a class="client-quick-card" href="<?= url('client/search.php') ?>"><i class="bi bi-search"></i><span><strong>Find Doctors</strong><small>Search available care</small></span><i class="bi bi-chevron-right"></i></a></div>
+      <div class="col-6 col-lg-3"><a class="client-quick-card" href="<?= url('client/appointments.php') ?>"><i class="bi bi-calendar2-week"></i><span><strong>Appointments</strong><small>View your bookings</small></span><i class="bi bi-chevron-right"></i></a></div>
+      <div class="col-6 col-lg-3"><a class="client-quick-card" href="<?= url('client/subscription.php') ?>"><i class="bi bi-credit-card"></i><span><strong>Subscription</strong><small>Plan and quota</small></span><i class="bi bi-chevron-right"></i></a></div>
+      <div class="col-6 col-lg-3"><a class="client-quick-card" href="<?= url('client/profile.php') ?>"><i class="bi bi-person"></i><span><strong>Profile</strong><small>Personal details</small></span><i class="bi bi-chevron-right"></i></a></div>
     </div>
+  </section>
 
-    <?php if (empty($upcomingAppointments)): ?>
-      <div class="text-center py-5 text-muted">
-        <i class="bi bi-calendar-plus fs-1 d-block mb-2 text-secondary"></i>
-        <p class="mb-2">You have no upcoming appointments scheduled.</p>
-        <a href="<?= url('client/search.php') ?>" class="btn btn-teal btn-sm">Find Doctors & Book</a>
-      </div>
-    <?php else: ?>
-      <div class="table-responsive">
-        <table class="table table-custom table-hover align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Doctor / Healthcare Centre</th>
-              <th>Date & Time</th>
-              <th>Location</th>
-              <th>Status</th>
-              <th class="text-end">Action</th>
-            </tr>
-          </thead>
-          <tbody>
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <section class="client-search-card h-100">
+        <div class="client-card-label"><i class="bi bi-compass"></i> Quick search</div>
+        <h2>Find nearby care</h2><p>Start with a specialty and city. You can refine results on the search page.</p>
+        <form action="<?= url('client/search.php') ?>" method="GET" class="mt-3">
+          <label class="form-label">Specialization</label>
+          <select name="specialization_id" class="form-select mb-3"><option value="">All specializations</option><?php foreach ($specializations as $sp): ?><option value="<?= $sp['Specialization_ID'] ?>"><?= e($sp['Name']) ?></option><?php endforeach; ?></select>
+          <label class="form-label">City</label>
+          <select name="city" class="form-select mb-3"><option value="">All Sri Lankan cities</option><?php foreach (array_keys($cities) as $cName): ?><option value="<?= e($cName) ?>" <?= ($client['City'] === $cName) ? 'selected' : '' ?>><?= e($cName) ?></option><?php endforeach; ?></select>
+          <button type="submit" class="btn btn-teal w-100"><i class="bi bi-search"></i> Search doctors</button>
+        </form>
+      </section>
+    </div>
+    <div class="col-lg-7">
+      <section class="client-upcoming-card h-100">
+        <div class="client-section-head"><div><div class="client-card-label"><i class="bi bi-calendar-event"></i> Schedule</div><h2>Upcoming appointments</h2></div><a href="<?= url('client/appointments.php') ?>">View all <i class="bi bi-arrow-right"></i></a></div>
+        <?php if (empty($upcomingAppointments)): ?>
+          <div class="client-upcoming-empty"><i class="bi bi-calendar2"></i><p class="mb-0">No upcoming appointments to show.</p></div>
+        <?php else: ?>
+          <div class="client-appointment-list">
             <?php foreach ($upcomingAppointments as $ua): ?>
-              <tr>
-                <td>
-                  <?php if ($ua['Doc_First']): ?>
-                    <div class="fw-bold">Dr. <?= e($ua['Doc_First'] . ' ' . $ua['Doc_Last']) ?></div>
-                    <small class="text-muted"><?= e($ua['Business_Name']) ?></small>
-                  <?php else: ?>
-                    <div class="fw-bold"><?= e($ua['Centre_Name'] ?: $ua['Business_Name']) ?></div>
-                    <small class="text-muted">Healthcare Facility Consultation</small>
-                  <?php endif; ?>
-                </td>
-                <td>
-                  <div class="fw-semibold text-teal"><?= formatDate($ua['Slot_Date']) ?></div>
-                  <small class="text-muted"><?= formatTime($ua['Start_Time']) ?> – <?= formatTime($ua['End_Time']) ?></small>
-                </td>
-                <td>
-                  <small><i class="bi bi-geo-alt"></i> <?= e($ua['Provider_Address']) ?>, <?= e($ua['Provider_City']) ?></small>
-                </td>
-                <td><?= renderStatusBadge($ua['Appt_Status']) ?></td>
-                <td class="text-end">
-                  <a href="<?= url('client/appointments.php') ?>" class="btn btn-outline-teal btn-sm">
-                    View / Cancel
-                  </a>
-                </td>
-              </tr>
+              <a href="<?= url('client/appointments.php') ?>" class="client-appointment-row">
+                <div class="client-appt-date"><strong><?= date('d', strtotime($ua['Slot_Date'])) ?></strong><span><?= strtoupper(date('M', strtotime($ua['Slot_Date']))) ?></span></div>
+                <div class="client-appt-copy"><strong><?= $ua['Doc_First'] ? 'Dr. ' . e($ua['Doc_First'] . ' ' . $ua['Doc_Last']) : e($ua['Centre_Name'] ?: $ua['Business_Name']) ?></strong><span><?= formatTime($ua['Start_Time']) ?> · <?= e($ua['Provider_City']) ?></span></div>
+                <div class="client-appt-status"><?= renderStatusBadge($ua['Appt_Status']) ?></div><i class="bi bi-chevron-right"></i>
+              </a>
             <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php endif; ?>
+          </div>
+        <?php endif; ?>
+      </section>
+    </div>
   </div>
 </div>
 

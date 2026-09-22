@@ -1,7 +1,5 @@
 <?php
-/**
- * Multi-Role Registration Page (Client, Doctor, Healthcare Centre)
- */
+
 
 $pageTitle = 'Create an Account';
 require_once __DIR__ . '/../config/database.php';
@@ -15,7 +13,7 @@ if (isLoggedIn()) {
 
 $db = Database::getConnection();
 
-// Fetch specializations for doctor registration
+
 $specializations = $db->query("SELECT * FROM `SPECIALIZATION` ORDER BY Name ASC")->fetchAll();
 $cities = getSriLankanCities();
 
@@ -23,7 +21,7 @@ $errors = [];
 $roleType = $_GET['role'] ?? $_POST['role_type'] ?? 'CLIENT';
 $selectedPlanId = (int)($_GET['plan_id'] ?? $_POST['selected_plan_id'] ?? 0);
 
-// Form Preserved Values
+
 $form = [
     'first_name' => '',
     'last_name'  => '',
@@ -33,21 +31,21 @@ $form = [
     'role_type'  => $roleType,
     'provider_type' => $_POST['provider_type'] ?? 'DOCTOR',
     'consultation_fee' => 2000.00,
-    // Client fields
+    
     'dob'        => '',
     'gender'     => 'MALE',
     'address'    => '',
     'city'       => 'Colombo',
     'latitude'   => '6.927100',
     'longitude'  => '79.861200',
-    // Doctor fields
+    
     'business_name' => '',
     'medical_license_no' => '',
     'experience_years' => 5,
     'consultation_duration' => 20,
     'bio'        => '',
     'specializations' => [],
-    // Centre fields
+    
     'centre_name' => '',
     'registration_no' => '',
     'centre_description' => ''
@@ -56,7 +54,7 @@ $form = [
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     CSRF::check();
 
-    // Collect and sanitize base user info
+    
     $form['first_name'] = trim($_POST['first_name'] ?? '');
     $form['last_name']  = trim($_POST['last_name'] ?? '');
     $form['email']      = trim($_POST['email'] ?? '');
@@ -72,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['latitude']   = floatval($_POST['latitude'] ?? 6.9271);
     $form['longitude']  = floatval($_POST['longitude'] ?? 79.8612);
 
-    // Basic Validations
+    
     if (empty($form['first_name']) || empty($form['last_name'])) {
         $errors[] = 'First Name and Last Name are required.';
     }
@@ -82,21 +80,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($form['phone'])) {
         $errors[] = 'Phone number is required.';
     }
-    if (strlen($password) < 6) {
-        $errors[] = 'Password must be at least 6 characters long.';
+    if (strlen($password) < 8) {
+        $errors[] = 'Password must be at least 8 characters long.';
     }
     if ($password !== $password_confirm) {
         $errors[] = 'Passwords do not match.';
     }
 
-    // Check duplicate email
+    
     $chkStmt = $db->prepare("SELECT User_ID FROM `USER` WHERE Email = ?");
     $chkStmt->execute([$form['email']]);
     if ($chkStmt->fetch()) {
         $errors[] = 'This email address is already registered. Please sign in or use another email.';
     }
 
-    // Role-specific validations
+    
     if ($form['role_type'] === 'CLIENT') {
         $form['dob'] = $_POST['dob'] ?? null;
         $form['gender'] = $_POST['gender'] ?? 'OTHER';
@@ -118,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'This SLMC Medical License Number is already registered.';
                 }
             }
-        } else { // HEALTHCARE_CENTRE
+        } else { 
             $form['centre_name'] = trim($_POST['centre_name'] ?? '');
             $form['registration_no'] = trim($_POST['registration_no'] ?? '');
             $form['centre_description'] = trim($_POST['centre_description'] ?? '');
@@ -138,31 +136,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Process Registration if no validation errors
+    
     if (empty($errors)) {
         try {
             $db->beginTransaction();
 
             $passwordHash = password_hash($password, PASSWORD_BCRYPT);
             
-            // Insert USER
-            $userStmt = $db->prepare("
-                INSERT INTO `USER` (Email, Password_Hash, First_Name, Last_Name, Phone, NIC_No, Role_Type, Account_Status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
-            ");
-            $userStmt->execute([
-                $form['email'],
-                $passwordHash,
-                $form['first_name'],
-                $form['last_name'],
-                $form['phone'],
-                $form['nic_no'] ?: null,
-                $form['role_type']
-            ]);
+            
+            // Keep registration compatible with both the current schema and older
+            // imported databases that do not yet contain USER.NIC_No.
+            $nicColumnStmt = $db->query("SHOW COLUMNS FROM `USER` LIKE 'NIC_No'");
+            $hasNicColumn = (bool)$nicColumnStmt->fetch();
+
+            $initialAccountStatus = ($form['role_type'] === 'PROVIDER') ? 'PENDING' : 'ACTIVE';
+
+            if ($hasNicColumn) {
+                $userStmt = $db->prepare("
+                    INSERT INTO `USER` (Email, Password_Hash, First_Name, Last_Name, Phone, NIC_No, Role_Type, Account_Status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $userStmt->execute([
+                    $form['email'], $passwordHash, $form['first_name'], $form['last_name'],
+                    $form['phone'], $form['nic_no'] ?: null, $form['role_type'], $initialAccountStatus
+                ]);
+            } else {
+                $userStmt = $db->prepare("
+                    INSERT INTO `USER` (Email, Password_Hash, First_Name, Last_Name, Phone, Role_Type, Account_Status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ");
+                $userStmt->execute([
+                    $form['email'], $passwordHash, $form['first_name'], $form['last_name'],
+                    $form['phone'], $form['role_type'], $initialAccountStatus
+                ]);
+            }
             $userId = (int)$db->lastInsertId();
 
             if ($form['role_type'] === 'CLIENT') {
-                // Insert CLIENT
+                
                 $clientStmt = $db->prepare("
                     INSERT INTO `CLIENT` (User_ID, Date_of_Birth, Gender, Address, City, Latitude, Longitude)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -176,14 +187,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $form['latitude'],
                     $form['longitude']
                 ]);
-            } else { // PROVIDER
+            } else { 
                 $provType = $form['provider_type'];
                 $bName = ($provType === 'DOCTOR') ? $form['business_name'] : $form['centre_name'];
                 
-                // Insert PROVIDER
+                
                 $provStmt = $db->prepare("
-                    INSERT INTO `PROVIDER` (User_ID, Provider_Type, Business_Name, Address, City, Latitude, Longitude, Consultation_Fee, Contact_Number, Description, Verification_Status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'VERIFIED')
+                    INSERT INTO `PROVIDER` (User_ID, Provider_Type, Business_Name, Address, City, Latitude, Longitude, Contact_Number, Description, Verification_Status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
                 ");
                 $provStmt->execute([
                     $userId,
@@ -193,17 +204,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $form['city'],
                     $form['latitude'],
                     $form['longitude'],
-                    $form['consultation_fee'],
                     $form['phone'],
                     ($provType === 'DOCTOR' ? $form['bio'] : $form['centre_description'])
                 ]);
                 $providerId = (int)$db->lastInsertId();
 
                 if ($provType === 'DOCTOR') {
-                    // Insert DOCTOR
+                    
                     $docStmt = $db->prepare("
                         INSERT INTO `DOCTOR` (Provider_ID, Medical_License_No, Professional_Bio, Experience_Years, Consultation_Duration, Verification_Status)
-                        VALUES (?, ?, ?, ?, ?, 'VERIFIED')
+                        VALUES (?, ?, ?, ?, ?, 'PENDING')
                     ");
                     $docStmt->execute([
                         $providerId,
@@ -214,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                     $doctorId = (int)$db->lastInsertId();
 
-                    // Insert DOCTOR_SPECIALIZATION links
+                    
                     if (!empty($form['specializations'])) {
                         $dsStmt = $db->prepare("INSERT INTO `DOCTOR_SPECIALIZATION` (Doctor_ID, Specialization_ID) VALUES (?, ?)");
                         foreach ($form['specializations'] as $spId) {
@@ -222,10 +232,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 } else {
-                    // Insert HEALTHCARE_CENTRE
+                    
                     $hcStmt = $db->prepare("
                         INSERT INTO `HEALTHCARE_CENTRE` (Provider_ID, Centre_Name, Registration_No, Description, Verification_Status)
-                        VALUES (?, ?, ?, ?, 'VERIFIED')
+                        VALUES (?, ?, ?, ?, 'PENDING')
                     ");
                     $hcStmt->execute([
                         $providerId,
@@ -238,7 +248,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $db->commit();
 
-            // Fetch complete user record to establish session
+            
+            if ($form['role_type'] === 'PROVIDER') {
+                if ($selectedPlanId > 0) {
+                    $planCheck = $db->prepare("SELECT Plan_ID FROM `SUBSCRIPTION_PLAN` WHERE Plan_ID = ? AND Status = 'ACTIVE' AND Target_Role IN ('PROVIDER','ALL')");
+                    $planCheck->execute([$selectedPlanId]);
+                    if ($planCheck->fetchColumn()) {
+                        $savePlan = $db->prepare("INSERT INTO `PROVIDER_PENDING_PLAN` (Provider_ID, Plan_ID) VALUES (?, ?) ON DUPLICATE KEY UPDATE Plan_ID = VALUES(Plan_ID), Selected_At = CURRENT_TIMESTAMP");
+                        $savePlan->execute([$providerId, $selectedPlanId]);
+                    }
+                }
+                $_SESSION['pending_provider_user_id'] = $userId;
+                redirect('public/provider-status.php');
+            }
+
             $uStmt = $db->prepare("SELECT * FROM `USER` WHERE User_ID = ?");
             $uStmt->execute([$userId]);
             $createdUser = $uStmt->fetch();
@@ -247,9 +270,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('success', 'Registration successful! Welcome to MediLink Sri Lanka.');
 
             if ($selectedPlanId > 0) {
-                redirect(($form['role_type'] === 'CLIENT' ? 'client' : 'provider') . '/subscription.php?plan_id=' . $selectedPlanId);
+                redirect('client/subscription.php?plan_id=' . $selectedPlanId);
             } else {
-                redirect(($form['role_type'] === 'CLIENT' ? 'client/dashboard.php' : 'provider/dashboard.php'));
+                redirect('client/dashboard.php');
             }
 
         } catch (Exception $e) {
@@ -265,7 +288,7 @@ require_once __DIR__ . '/../includes/header.php';
 <div class="container py-5">
   <div class="row justify-content-center">
     <div class="col-lg-8">
-      <div class="card card-custom p-4 p-md-5 shadow">
+      <div class="card card-custom register-card-stable p-4 p-md-5 shadow">
         <div class="text-center mb-4">
           <h2 class="fw-bold">Create Your MediLink Account</h2>
           <p class="text-muted small">Join Sri Lanka's healthcare mediator platform</p>
@@ -287,27 +310,36 @@ require_once __DIR__ . '/../includes/header.php';
           <?= CSRF::inputField() ?>
           <input type="hidden" name="selected_plan_id" value="<?= $selectedPlanId ?>">
 
+          <div class="reg-wizard-head mb-4" id="reg-progress">
+            <div class="reg-stepper" aria-label="Registration progress">
+              <div class="reg-step-label active" data-reg-label="1"><span>1</span><div><strong>Account</strong><small>Identity & sign in</small></div></div>
+              <div class="reg-step-label" data-reg-label="2"><span>2</span><div><strong>Details</strong><small>Your role</small></div></div>
+              <div class="reg-step-label" data-reg-label="3"><span>3</span><div><strong>Review</strong><small>Location & confirm</small></div></div>
+            </div>
+            <div class="progress mt-3" aria-hidden="true"><div class="progress-bar bg-teal" id="reg-progress-bar" style="width:33%"></div></div>
+          </div>
+          <section class="reg-step" data-reg-step="1">
           <!-- Role Selection Buttons -->
           <div class="mb-4">
             <label class="form-label fw-bold small text-uppercase letter-spacing-1 text-muted">Select Account Type</label>
-            <div class="row g-2">
+            <div class="row g-2 reg-role-grid">
               <div class="col-md-4">
                 <input type="radio" class="btn-check" name="role_type" id="role_client" value="CLIENT" <?= $form['role_type'] === 'CLIENT' ? 'checked' : '' ?> onchange="toggleRoleFields()">
-                <label class="btn btn-outline-teal w-100 py-2 d-flex flex-column align-items-center gap-1" for="role_client">
+                <label class="btn btn-outline-teal reg-role-option w-100 d-flex flex-column align-items-center justify-content-center gap-1" for="role_client">
                   <i class="bi bi-person fs-4"></i>
                   <span class="fw-semibold">Patient / Client</span>
                 </label>
               </div>
               <div class="col-md-4">
                 <input type="radio" class="btn-check" name="role_type" id="role_doctor" value="PROVIDER" data-provider-type="DOCTOR" <?= ($form['role_type'] === 'PROVIDER' && $form['provider_type'] === 'DOCTOR') ? 'checked' : '' ?> onchange="toggleRoleFields()">
-                <label class="btn btn-outline-teal w-100 py-2 d-flex flex-column align-items-center gap-1" for="role_doctor">
+                <label class="btn btn-outline-teal reg-role-option w-100 d-flex flex-column align-items-center justify-content-center gap-1" for="role_doctor">
                   <i class="bi bi-person-badge fs-4"></i>
                   <span class="fw-semibold">Specialist Doctor</span>
                 </label>
               </div>
               <div class="col-md-4">
                 <input type="radio" class="btn-check" name="role_type" id="role_centre" value="PROVIDER" data-provider-type="HEALTHCARE_CENTRE" <?= ($form['role_type'] === 'PROVIDER' && $form['provider_type'] === 'HEALTHCARE_CENTRE') ? 'checked' : '' ?> onchange="toggleRoleFields()">
-                <label class="btn btn-outline-teal w-100 py-2 d-flex flex-column align-items-center gap-1" for="role_centre">
+                <label class="btn btn-outline-teal reg-role-option w-100 d-flex flex-column align-items-center justify-content-center gap-1" for="role_centre">
                   <i class="bi bi-hospital fs-4"></i>
                   <span class="fw-semibold">Healthcare Centre</span>
                 </label>
@@ -346,14 +378,16 @@ require_once __DIR__ . '/../includes/header.php';
           <div class="row g-3 mb-3">
             <div class="col-md-6">
               <label class="form-label small fw-semibold">Password *</label>
-              <input type="password" name="password" class="form-control" placeholder="Min 6 characters" required>
+              <div class="input-group"><span class="input-group-text"><i class="bi bi-lock"></i></span><input type="password" name="password" id="reg-password" class="form-control" placeholder="Minimum 8 characters" minlength="8" required><button class="btn btn-outline-secondary" type="button" data-password-toggle="reg-password" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
             </div>
             <div class="col-md-6">
               <label class="form-label small fw-semibold">Confirm Password *</label>
-              <input type="password" name="password_confirm" class="form-control" required>
+              <div class="input-group"><span class="input-group-text"><i class="bi bi-shield-check"></i></span><input type="password" name="password_confirm" id="reg-password-confirm" class="form-control" minlength="8" required><button class="btn btn-outline-secondary" type="button" data-password-toggle="reg-password-confirm" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
             </div>
           </div>
 
+          <div class="d-flex justify-content-end mt-4"><button type="button" class="btn btn-teal px-4" data-reg-next>Continue <i class="bi bi-arrow-right ms-1"></i></button></div></section>
+          <section class="reg-step d-none" data-reg-step="2">
           <!-- Section: Client Specific Fields -->
           <div id="section-client" class="<?= $form['role_type'] === 'CLIENT' ? '' : 'd-none' ?>">
             <hr class="my-4">
@@ -450,6 +484,8 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
           </div>
 
+          <div class="d-flex justify-content-between mt-4"><button type="button" class="btn btn-light" data-reg-prev><i class="bi bi-arrow-left me-1"></i>Back</button><button type="button" class="btn btn-teal px-4" data-reg-next>Continue <i class="bi bi-arrow-right ms-1"></i></button></div></section>
+          <section class="reg-step d-none" data-reg-step="3">
           <!-- Location & Interactive Map Picker -->
           <hr class="my-4">
           <div class="d-flex justify-content-between align-items-center mb-3">
@@ -496,12 +532,24 @@ require_once __DIR__ . '/../includes/header.php';
           </div>
 
           <div id="location-feedback" class="small mb-4">
-            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i> Location set to Colombo. Ready for proximity search.</span>
+            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i> Location selected. You can adjust the pin before creating your account.</span>
           </div>
 
-          <button type="submit" class="btn btn-teal w-100 py-3 fw-bold fs-6">
+          <div class="reg-review-card mb-4">
+            <div class="d-flex align-items-center justify-content-between gap-3 mb-3"><div><div class="text-uppercase small text-muted fw-semibold">Final check</div><h6 class="mb-0 fw-bold">Review your account</h6></div><i class="bi bi-clipboard-check fs-4 text-teal"></i></div>
+            <div class="row g-3 small">
+              <div class="col-sm-6"><span class="text-muted d-block">Name</span><strong id="review-name">—</strong></div>
+              <div class="col-sm-6"><span class="text-muted d-block">Account type</span><strong id="review-role">—</strong></div>
+              <div class="col-sm-6"><span class="text-muted d-block">Email</span><strong id="review-email">—</strong></div>
+              <div class="col-sm-6"><span class="text-muted d-block">City</span><strong id="review-city">—</strong></div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2"><button type="button" class="btn btn-light px-4" data-reg-prev><i class="bi bi-arrow-left me-1"></i>Back</button>
+          <button type="submit" class="btn btn-teal flex-grow-1 py-3 fw-bold fs-6">
             <i class="bi bi-check-circle-fill me-2"></i> Create Account & Get Started
-          </button>
+          </button></div>
+          </section>
         </form>
 
         <div class="text-center small text-muted mt-4">

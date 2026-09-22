@@ -1,7 +1,5 @@
 <?php
-/**
- * Landing Page - MediLink Sri Lanka
- */
+
 
 $pageTitle = 'Home - Medical Mediator Platform';
 require_once __DIR__ . '/../includes/header.php';
@@ -9,10 +7,10 @@ require_once __DIR__ . '/../config/database.php';
 
 $db = Database::getConnection();
 
-// Fetch specializations for search bar
+
 $specs = $db->query("SELECT * FROM `SPECIALIZATION` ORDER BY Name ASC")->fetchAll();
 
-// Fetch featured verified doctors
+
 $docQuery = "
     SELECT d.Doctor_ID, p.Provider_ID, p.Business_Name, p.City, p.Address, p.Verification_Status,
            u.First_Name, u.Last_Name, d.Medical_License_No, d.Experience_Years, d.Professional_Bio,
@@ -28,9 +26,15 @@ $docQuery = "
 ";
 $featuredDoctors = $db->query($docQuery)->fetchAll();
 
-// Fetch featured verified healthcare centres
+
 $centreQuery = "
-    SELECT hc.Centre_ID, p.Provider_ID, hc.Centre_Name, hc.Registration_No, hc.Description, p.City, p.Address
+    SELECT hc.Centre_ID, p.Provider_ID, hc.Centre_Name, hc.Registration_No, hc.Description, p.City, p.Address,
+           (SELECT COUNT(*) FROM `CENTRE_DOCTOR_LINK` cdl
+            WHERE cdl.Centre_ID = hc.Centre_ID AND cdl.Status = 'ACTIVE') AS Active_Doctors,
+           (SELECT COUNT(DISTINCT ds.Specialization_ID)
+            FROM `CENTRE_DOCTOR_LINK` cdl
+            JOIN `DOCTOR_SPECIALIZATION` ds ON ds.Doctor_ID = cdl.Doctor_ID
+            WHERE cdl.Centre_ID = hc.Centre_ID AND cdl.Status = 'ACTIVE') AS Specialty_Count
     FROM `HEALTHCARE_CENTRE` hc
     JOIN `PROVIDER` p ON hc.Provider_ID = p.Provider_ID
     JOIN `USER` u ON p.User_ID = u.User_ID
@@ -39,165 +43,278 @@ $centreQuery = "
 ";
 $featuredCentres = $db->query($centreQuery)->fetchAll();
 
-// Fetch public subscription plans
+
 $plans = $db->query("SELECT * FROM `SUBSCRIPTION_PLAN` WHERE Status = 'ACTIVE' AND Target_Role = 'CLIENT' ORDER BY Price ASC")->fetchAll();
 
 $cities = getSriLankanCities();
+$publicStats = $db->query("SELECT (SELECT COUNT(*) FROM `PROVIDER` WHERE Verification_Status='VERIFIED') verified_providers, (SELECT COUNT(DISTINCT City) FROM `PROVIDER` WHERE Verification_Status='VERIFIED') cities_covered, (SELECT COUNT(*) FROM `DOCTOR`) doctors")->fetch();
 ?>
 
-<!-- Hero Section -->
-<section class="hero-section text-center">
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-lg-10 col-xl-8">
-        <span class="badge bg-light text-dark px-3 py-2 rounded-pill fw-semibold mb-3 d-inline-block">
-          <i class="bi bi-shield-check text-success me-1"></i> Sri Lanka's Verified Healthcare Network
-        </span>
-        <h1 class="display-4 fw-bold mb-3">Book Doctor Appointments Across Sri Lanka</h1>
-        <p class="lead text-light mb-4 opacity-90 mx-auto" style="max-width: 700px;">
-          Subscribe to MediLink for seamless search by GPS location, specialized medical discovery, and direct calendar appointment booking with verified practitioners.
-        </p>
+<!-- Home Hero V2 -->
+<section class="home-hero-v2 text-center">
+  <div class="container position-relative">
+    <span class="hero-eyebrow"><i class="bi bi-patch-check-fill"></i> Verified healthcare discovery in Sri Lanka</span>
+    <h1 class="hero-title">Find the right doctor.<br class="d-none d-md-block"> Book with confidence.</h1>
+    <p class="hero-copy">Search verified doctors by specialty and city, compare provider details, and move from discovery to appointment booking in one place.</p>
 
-        <!-- Quick Search Bar Card -->
-        <div class="card card-custom p-3 shadow-lg border-0 mx-auto text-start" style="max-width: 800px;">
-          <form action="<?= url('client/search.php') ?>" method="GET" class="row g-2 align-items-end">
-            <div class="col-md-5">
-              <label class="form-label text-muted small fw-semibold mb-1"><i class="bi bi-heart-pulse text-teal"></i> Specialization</label>
-              <select name="specialization_id" class="form-select">
-                <option value="">All Specializations</option>
-                <?php foreach ($specs as $sp): ?>
-                  <option value="<?= $sp['Specialization_ID'] ?>"><?= e($sp['Name']) ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label text-muted small fw-semibold mb-1"><i class="bi bi-geo-alt text-teal"></i> Location / City</label>
-              <select name="city" class="form-select">
-                <option value="">All Sri Lankan Cities</option>
-                <?php foreach (array_keys($cities) as $cName): ?>
-                  <option value="<?= $cName ?>"><?= $cName ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <button type="submit" class="btn btn-teal w-100 py-2 fw-semibold">
-                <i class="bi bi-search me-1"></i> Search
-              </button>
-            </div>
-          </form>
+    <div class="hero-search-v2 text-start">
+      <form action="<?= url('client/search.php') ?>" method="GET" class="row g-0 align-items-center">
+        <div class="col-md-5 search-field">
+          <label class="search-label" for="heroSpecialization"><i class="bi bi-heart-pulse"></i> Specialty</label>
+          <select id="heroSpecialization" name="specialization_id" class="form-select" aria-label="Choose a medical specialty">
+            <option value="">All specializations</option>
+            <?php foreach ($specs as $sp): ?>
+              <option value="<?= $sp['Specialization_ID'] ?>"><?= e($sp['Name']) ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
-      </div>
+        <div class="col-md-4 search-field">
+          <label class="search-label" for="heroCity"><i class="bi bi-geo-alt"></i> City</label>
+          <select id="heroCity" name="city" class="form-select" aria-label="Choose a Sri Lankan city">
+            <option value="">Anywhere in Sri Lanka</option>
+            <?php foreach (array_keys($cities) as $cName): ?>
+              <option value="<?= e($cName) ?>"><?= e($cName) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="col-md-3 ps-md-2">
+          <button type="submit" class="btn btn-teal hero-search-btn w-100">
+            <i class="bi bi-search me-2"></i>Find Doctors
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="hero-search-note">
+      <span><i class="bi bi-shield-check"></i> Verified providers</span>
+      <span><i class="bi bi-calendar2-check"></i> Clear appointment slots</span>
+      <span><i class="bi bi-geo-alt"></i> Sri Lanka-wide search</span>
     </div>
   </div>
 </section>
 
-<!-- Featured Specialists -->
-<section class="py-5">
+<!-- Trust Stats V2 -->
+<section class="ml-trust-strip-v2" aria-label="MediLink network statistics">
   <div class="container">
-    <div class="d-flex justify-content-between align-items-end mb-4">
-      <div>
-        <h6 class="text-teal text-uppercase fw-bold letter-spacing-1 mb-1">Specialists</h6>
-        <h2 class="fw-bold mb-0">Featured Doctors & Consultants</h2>
-      </div>
-      <a href="<?= url('client/search.php') ?>" class="btn btn-outline-teal btn-sm">View All Specialists <i class="bi bi-arrow-right"></i></a>
-    </div>
-
-    <div class="row g-4">
-      <?php foreach ($featuredDoctors as $doc): ?>
+    <div class="ml-trust-panel-v2">
+      <div class="row g-0">
         <div class="col-md-4">
-          <div class="card card-custom h-100 p-3">
-            <div class="d-flex align-items-center gap-3 mb-3">
-              <div class="rounded-circle bg-light d-flex align-items-center justify-content-center text-teal" style="width: 54px; height: 54px; font-size: 1.5rem;">
-                <i class="bi bi-person-badge"></i>
-              </div>
-              <div>
-                <h5 class="fw-bold mb-0">Dr. <?= e($doc['First_Name'] . ' ' . $doc['Last_Name']) ?></h5>
-                <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-patch-check-fill"></i> <?= e($doc['Medical_License_No']) ?></span>
-              </div>
-            </div>
-            <p class="text-teal fw-semibold small mb-1"><i class="bi bi-award me-1"></i> <?= e($doc['Specializations'] ?: 'General Consultant') ?></p>
-            <p class="text-muted small mb-3 text-truncate-2"><?= e($doc['Professional_Bio']) ?></p>
-            <div class="mt-auto pt-3 border-top d-flex justify-content-between align-items-center">
-              <span class="small text-muted"><i class="bi bi-geo-alt"></i> <?= e($doc['City']) ?> (<?= $doc['Experience_Years'] ?> yrs exp)</span>
-              <a href="<?= url('client/provider_view.php?id=' . $doc['Provider_ID']) ?>" class="btn btn-teal btn-sm px-3">View Profile & Slots</a>
-            </div>
+          <div class="ml-trust-item-v2">
+            <span class="ml-trust-icon-v2"><i class="bi bi-patch-check"></i></span>
+            <div><div class="ml-trust-number-v2"><?= number_format((int)$publicStats['verified_providers']) ?></div><div class="ml-trust-label-v2">Verified healthcare providers</div></div>
           </div>
         </div>
-      <?php endforeach; ?>
-    </div>
-  </div>
-</section>
-
-<!-- Healthcare Centres -->
-<section class="py-5 bg-light">
-  <div class="container">
-    <div class="d-flex justify-content-between align-items-end mb-4">
-      <div>
-        <h6 class="text-teal text-uppercase fw-bold letter-spacing-1 mb-1">Institutions</h6>
-        <h2 class="fw-bold mb-0">Partner Healthcare Centres</h2>
-      </div>
-      <a href="<?= url('client/search.php?type=HEALTHCARE_CENTRE') ?>" class="btn btn-outline-teal btn-sm">View All Centres <i class="bi bi-arrow-right"></i></a>
-    </div>
-
-    <div class="row g-4">
-      <?php foreach ($featuredCentres as $hc): ?>
-        <div class="col-md-6">
-          <div class="card card-custom h-100 p-4">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <h4 class="fw-bold text-teal mb-0"><?= e($hc['Centre_Name']) ?></h4>
-              <span class="badge bg-info text-dark"><?= e($hc['Registration_No']) ?></span>
-            </div>
-            <p class="text-muted small mb-2"><i class="bi bi-geo-alt-fill text-danger me-1"></i> <?= e($hc['Address']) ?>, <?= e($hc['City']) ?></p>
-            <p class="text-secondary small mb-4"><?= e($hc['Description']) ?></p>
-            <div class="mt-auto">
-              <a href="<?= url('client/provider_view.php?id=' . $hc['Provider_ID']) ?>" class="btn btn-teal btn-sm px-3">View Centre & Doctors</a>
-            </div>
+        <div class="col-md-4 ml-trust-divider-v2">
+          <div class="ml-trust-item-v2">
+            <span class="ml-trust-icon-v2"><i class="bi bi-person-badge"></i></span>
+            <div><div class="ml-trust-number-v2"><?= number_format((int)$publicStats['doctors']) ?></div><div class="ml-trust-label-v2">Doctors & consultants listed</div></div>
           </div>
         </div>
-      <?php endforeach; ?>
+        <div class="col-md-4 ml-trust-divider-v2">
+          <div class="ml-trust-item-v2">
+            <span class="ml-trust-icon-v2"><i class="bi bi-geo-alt"></i></span>
+            <div><div class="ml-trust-number-v2"><?= number_format((int)$publicStats['cities_covered']) ?></div><div class="ml-trust-label-v2">Cities with verified providers</div></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- Subscription Pricing Preview -->
-<section class="py-5">
+<!-- Featured Specialists V2 -->
+<section class="ml-specialists-section py-5">
   <div class="container">
-    <div class="text-center max-w-700 mx-auto mb-5">
-      <h6 class="text-teal text-uppercase fw-bold letter-spacing-1 mb-1">Flexible Membership</h6>
-      <h2 class="fw-bold mb-2">Client Subscription Plans</h2>
-      <p class="text-muted">Choose the membership tier that fits your healthcare needs with guaranteed monthly appointment quotas and GPS radius filters.</p>
+    <div class="ml-section-heading mb-4">
+      <div>
+        <span class="ml-section-kicker"><i class="bi bi-person-heart"></i> Specialists</span>
+        <h2>Featured Doctors & Consultants</h2>
+        <p>Explore verified professionals and review their specialty, experience and available appointment slots.</p>
+      </div>
+      <a href="<?= url('client/search.php') ?>" class="btn btn-outline-teal ml-section-link">
+        View all <i class="bi bi-arrow-right"></i>
+      </a>
     </div>
 
-    <div class="row g-4 justify-content-center">
-      <?php foreach ($plans as $plan): ?>
-        <div class="col-md-4">
-          <div class="card plan-card h-100 p-4 bg-white <?= $plan['Plan_ID'] == 2 ? 'featured' : '' ?>">
-            <?php if ($plan['Plan_ID'] == 2): ?>
-              <span class="badge bg-teal text-white plan-badge"><i class="bi bi-star-fill me-1"></i> Most Popular</span>
-            <?php endif; ?>
-            <h4 class="fw-bold mb-1"><?= e($plan['Plan_Name']) ?></h4>
-            <p class="text-muted small mb-3"><?= e($plan['Description']) ?></p>
-            
-            <div class="mb-4">
-              <span class="stat-value text-teal"><?= formatLKR($plan['Price']) ?></span>
-              <span class="text-muted small"> / year (<?= $plan['Duration_Days'] ?> days)</span>
-            </div>
+    <?php if ($featuredDoctors): ?>
+      <div class="row g-4">
+        <?php foreach ($featuredDoctors as $doc): ?>
+          <div class="col-lg-4 col-md-6">
+            <article class="ml-doctor-card h-100">
+              <div class="ml-doctor-card-top">
+                <div class="ml-doctor-avatar" aria-hidden="true">
+                  <i class="bi bi-person"></i>
+                </div>
+                <div class="ml-doctor-identity">
+                  <div class="d-flex align-items-start justify-content-between gap-2">
+                    <div>
+                      <h3>Dr. <?= e($doc['First_Name'] . ' ' . $doc['Last_Name']) ?></h3>
+                      <div class="ml-doctor-specialty"><?= e($doc['Specializations'] ?: 'General Consultant') ?></div>
+                    </div>
+                    <span class="ml-verified-mark" title="Verified provider" aria-label="Verified provider"><i class="bi bi-patch-check-fill"></i></span>
+                  </div>
+                </div>
+              </div>
 
-            <ul class="list-unstyled d-flex flex-column gap-2 small text-secondary mb-4">
-              <li><i class="bi bi-check2-circle text-success me-2"></i> <strong><?= $plan['Max_Book_per_Month'] ?> Appointments</strong> per month</li>
-              <li><i class="bi bi-check2-circle text-success me-2"></i> <strong><?= $plan['Search_Radius_KM'] ?> km</strong> search distance radius</li>
-              <li><i class="bi bi-check2-circle text-success me-2"></i> Direct calendar slot booking</li>
-              <li><i class="bi bi-check2-circle text-success me-2"></i> Real-time cancellation & rescheduling</li>
-            </ul>
+              <div class="ml-doctor-meta">
+                <span><i class="bi bi-briefcase"></i><strong><?= (int)$doc['Experience_Years'] ?></strong> years experience</span>
+                <span><i class="bi bi-geo-alt"></i><?= e($doc['City']) ?></span>
+              </div>
 
-            <div class="mt-auto">
-              <a href="<?= url('public/plans.php') ?>" class="btn <?= $plan['Plan_ID'] == 2 ? 'btn-teal' : 'btn-outline-teal' ?> w-100 py-2">
-                Subscribe to <?= e($plan['Plan_Name']) ?>
+              <?php if (!empty($doc['Professional_Bio'])): ?>
+                <p class="ml-doctor-bio text-truncate-2"><?= e($doc['Professional_Bio']) ?></p>
+              <?php endif; ?>
+
+              <div class="ml-doctor-license">
+                <i class="bi bi-shield-check"></i>
+                <span><small>Medical licence</small><?= e($doc['Medical_License_No']) ?></span>
+              </div>
+
+              <div class="ml-doctor-actions mt-auto">
+                <a href="<?= url('client/provider_view.php?id=' . $doc['Provider_ID']) ?>" class="btn btn-teal w-100">
+                  View profile & slots <i class="bi bi-arrow-up-right"></i>
+                </a>
+              </div>
+            </article>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <div class="ml-specialists-empty text-center">
+        <i class="bi bi-person-search"></i>
+        <h3>No featured specialists yet</h3>
+        <p class="mb-3">Verified specialists will appear here when they are available.</p>
+        <a href="<?= url('client/search.php') ?>" class="btn btn-outline-teal">Search providers</a>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+
+<!-- Partner Healthcare Centres V2 -->
+<section class="ml-centres-section py-5">
+  <div class="container">
+    <div class="ml-section-heading mb-4">
+      <div>
+        <span class="ml-section-kicker"><i class="bi bi-hospital"></i> Healthcare network</span>
+        <h2>Partner Healthcare Centres</h2>
+        <p>Explore verified centres and the medical specialists currently affiliated with them.</p>
+      </div>
+      <a href="<?= url('client/search.php?type=HEALTHCARE_CENTRE') ?>" class="btn btn-outline-teal btn-sm ml-section-link">
+        View all centres <i class="bi bi-arrow-right"></i>
+      </a>
+    </div>
+
+    <?php if (!empty($featuredCentres)): ?>
+      <div class="row g-4">
+        <?php foreach ($featuredCentres as $hc): ?>
+          <div class="col-lg-6">
+            <article class="ml-centre-card h-100">
+              <div class="ml-centre-card-head">
+                <div class="ml-centre-icon"><i class="bi bi-hospital"></i></div>
+                <div class="ml-centre-title">
+                  <div class="ml-centre-verified"><i class="bi bi-patch-check-fill"></i> Verified partner</div>
+                  <h3><?= e($hc['Centre_Name']) ?></h3>
+                  <span><i class="bi bi-geo-alt"></i> <?= e($hc['City']) ?></span>
+                </div>
+              </div>
+
+              <p class="ml-centre-description"><?= e($hc['Description'] ?: 'Verified healthcare centre available through MediLink Sri Lanka.') ?></p>
+
+              <div class="ml-centre-stats">
+                <div><i class="bi bi-people"></i><span><strong><?= (int)$hc['Active_Doctors'] ?></strong> Affiliated doctors</span></div>
+                <div><i class="bi bi-heart-pulse"></i><span><strong><?= (int)$hc['Specialty_Count'] ?></strong> Specialties</span></div>
+              </div>
+
+              <div class="ml-centre-location">
+                <i class="bi bi-signpost-2"></i>
+                <span><?= e($hc['Address']) ?><?= $hc['Address'] && $hc['City'] ? ', ' : '' ?><?= e($hc['City']) ?></span>
+              </div>
+
+              <div class="ml-centre-footer">
+                <span class="ml-centre-reg"><i class="bi bi-shield-check"></i> Reg. <?= e($hc['Registration_No']) ?></span>
+                <a href="<?= url('client/provider_view.php?id=' . $hc['Provider_ID']) ?>" class="btn btn-teal btn-sm">
+                  View doctors <i class="bi bi-arrow-up-right"></i>
+                </a>
+              </div>
+            </article>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <div class="ml-centres-empty text-center">
+        <i class="bi bi-hospital"></i>
+        <h3>No partner centres to feature yet</h3>
+        <p class="mb-3">Verified healthcare centres will appear here when available.</p>
+        <a href="<?= url('client/search.php?type=HEALTHCARE_CENTRE') ?>" class="btn btn-outline-teal">Search healthcare centres</a>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+
+<!-- Home Plans Preview V2 -->
+<section class="ml-plans-preview py-5">
+  <div class="container">
+    <div class="ml-plans-intro">
+      <span class="ml-section-kicker"><i class="bi bi-wallet2"></i> Simple membership</span>
+      <h2>Choose a plan that fits your booking needs</h2>
+      <p>Compare the essentials here, then open the full plans page for complete details before subscribing.</p>
+    </div>
+
+    <?php if (!empty($plans)): ?>
+      <div class="row g-4 justify-content-center">
+        <?php foreach ($plans as $plan): ?>
+          <div class="col-lg-4 col-md-6">
+            <article class="ml-plan-preview-card">
+              <h3 class="ml-plan-name"><?= e($plan['Plan_Name']) ?></h3>
+              <p class="ml-plan-description"><?= e($plan['Description']) ?></p>
+
+              <div class="ml-plan-price">
+                <strong><?= formatLKR($plan['Price']) ?></strong>
+                <span>for <?= (int)$plan['Duration_Days'] ?> days</span>
+              </div>
+
+              <div class="ml-plan-benefits">
+                <div class="ml-plan-benefit"><i class="bi bi-calendar2-check"></i><span><strong><?= (int)$plan['Max_Book_per_Month'] ?></strong> appointments per month</span></div>
+                <div class="ml-plan-benefit"><i class="bi bi-geo-alt"></i><span>Search within <strong><?= (int)$plan['Search_Radius_KM'] ?> km</strong></span></div>
+                <div class="ml-plan-benefit"><i class="bi bi-arrow-repeat"></i><span>Booking, cancellation & rescheduling</span></div>
+              </div>
+
+              <a href="<?= url('public/plans.php') ?>" class="btn btn-outline-teal w-100 mt-auto">
+                View plan details <i class="bi bi-arrow-right ms-1"></i>
               </a>
-            </div>
+            </article>
           </div>
+        <?php endforeach; ?>
+      </div>
+      <div class="ml-plans-action">
+        <a href="<?= url('public/plans.php') ?>" class="btn btn-teal">Compare all plans <i class="bi bi-arrow-right ms-1"></i></a>
+      </div>
+    <?php else: ?>
+      <div class="text-center py-4 text-muted"><i class="bi bi-info-circle me-1"></i> No client plans are currently available.</div>
+    <?php endif; ?>
+  </div>
+</section>
+
+
+<!-- Home Final CTA V2 -->
+<section class="ml-home-final-cta" aria-labelledby="homeFinalCtaTitle">
+  <div class="container">
+    <div class="ml-home-final-panel">
+      <div class="ml-home-final-copy">
+        <span class="ml-section-kicker"><i class="bi bi-heart-pulse"></i> Your next appointment starts here</span>
+        <h2 id="homeFinalCtaTitle">Find verified healthcare without the guesswork.</h2>
+        <p>Search by specialty and location, review provider details, and choose an appointment slot that works for you.</p>
+        <div class="ml-home-final-trust" aria-label="Platform benefits">
+          <span><i class="bi bi-patch-check"></i> Verified providers</span>
+          <span><i class="bi bi-shield-check"></i> Protected account access</span>
+          <span><i class="bi bi-calendar2-check"></i> Clear booking flow</span>
         </div>
-      <?php endforeach; ?>
+      </div>
+      <div class="ml-home-final-actions">
+        <a href="<?= url('client/search.php') ?>" class="btn btn-teal btn-lg"><i class="bi bi-search me-2"></i>Find Doctors</a>
+        <?php if (!isLoggedIn()): ?>
+          <a href="<?= url('public/register.php') ?>" class="btn btn-outline-teal btn-lg"><i class="bi bi-person-plus me-2"></i>Create Account</a>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 </section>

@@ -1,29 +1,26 @@
--- =======================================================================
--- Database: patient_doctor_booking
--- Patient–Doctor Subscription Booking System (Sri Lanka Edition)
--- =======================================================================
 
 CREATE DATABASE IF NOT EXISTS `patient_doctor_booking`
   DEFAULT CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
 USE `patient_doctor_booking`;
-
--- Drop tables in reverse order of foreign key dependencies
+DROP TABLE IF EXISTS `AUDIT_LOG`;
+DROP TABLE IF EXISTS `PROVIDER_VERIFICATION_HISTORY`;
 DROP TABLE IF EXISTS `APPOINTMENT`;
 DROP TABLE IF EXISTS `SCHEDULED_SLOT`;
 DROP TABLE IF EXISTS `USER_SUBSCRIPTION`;
 DROP TABLE IF EXISTS `SUBSCRIPTION_PLAN`;
 DROP TABLE IF EXISTS `DOCTOR_SPECIALIZATION`;
 DROP TABLE IF EXISTS `SPECIALIZATION`;
+DROP TABLE IF EXISTS `CITY`;
 DROP TABLE IF EXISTS `CENTRE_DOCTOR_LINK`;
 DROP TABLE IF EXISTS `HEALTHCARE_CENTRE`;
 DROP TABLE IF EXISTS `DOCTOR`;
+DROP TABLE IF EXISTS `PROVIDER_PENDING_PLAN`;
 DROP TABLE IF EXISTS `PROVIDER`;
 DROP TABLE IF EXISTS `CLIENT`;
+DROP TABLE IF EXISTS `PASSWORD_RESET`;
 DROP TABLE IF EXISTS `USER`;
-
--- 1. USER Table (Central Authentication Table)
 CREATE TABLE `USER` (
   `User_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Email` VARCHAR(191) NOT NULL UNIQUE,
@@ -32,15 +29,24 @@ CREATE TABLE `USER` (
   `Last_Name` VARCHAR(100) NOT NULL,
   `Phone` VARCHAR(30) NOT NULL,
   `NIC_No` VARCHAR(20) NULL,
-  `Role_Type` ENUM('CLIENT', 'PROVIDER', 'SYSTEM_ADMIN') NOT NULL,
+  `Role_Type` ENUM('CLIENT', 'PROVIDER', 'SYSTEM_ADMIN', 'OWNER') NOT NULL,
   `Account_Status` ENUM('ACTIVE', 'SUSPENDED', 'PENDING') NOT NULL DEFAULT 'ACTIVE',
   `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `Updated_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_user_email` (`Email`),
   INDEX `idx_user_role_status` (`Role_Type`, `Account_Status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `PASSWORD_RESET` (
+  `Reset_ID` INT AUTO_INCREMENT PRIMARY KEY,
+  `User_ID` INT NOT NULL,
+  `Token_Hash` CHAR(64) NOT NULL UNIQUE,
+  `Expires_At` DATETIME NOT NULL,
+  `Used_At` DATETIME NULL,
+  `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_password_reset_user` FOREIGN KEY (`User_ID`) REFERENCES `USER` (`User_ID`) ON DELETE CASCADE,
+  INDEX `idx_password_reset_expiry` (`Expires_At`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. CLIENT Table (Patient Profile)
 CREATE TABLE `CLIENT` (
   `Client_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `User_ID` INT NOT NULL UNIQUE,
@@ -55,8 +61,6 @@ CREATE TABLE `CLIENT` (
     REFERENCES `USER` (`User_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
   INDEX `idx_client_city` (`City`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 3. PROVIDER Table (Base Provider: Doctor or Healthcare Centre)
 CREATE TABLE `PROVIDER` (
   `Provider_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `User_ID` INT NOT NULL UNIQUE,
@@ -66,7 +70,6 @@ CREATE TABLE `PROVIDER` (
   `City` VARCHAR(100) NOT NULL,
   `Latitude` DECIMAL(10, 8) NOT NULL DEFAULT 6.92710000,
   `Longitude` DECIMAL(11, 8) NOT NULL DEFAULT 79.86120000,
-  `Consultation_Fee` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
   `Contact_Number` VARCHAR(30) NOT NULL,
   `Description` TEXT NULL,
   `Verification_Status` ENUM('PENDING', 'VERIFIED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
@@ -76,8 +79,6 @@ CREATE TABLE `PROVIDER` (
   INDEX `idx_provider_city_type` (`City`, `Provider_Type`),
   INDEX `idx_provider_verification` (`Verification_Status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 4. DOCTOR Table (Doctor Specific Information)
 CREATE TABLE `DOCTOR` (
   `Doctor_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Provider_ID` INT NOT NULL UNIQUE,
@@ -90,8 +91,6 @@ CREATE TABLE `DOCTOR` (
     REFERENCES `PROVIDER` (`Provider_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
   INDEX `idx_doctor_license` (`Medical_License_No`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 5. HEALTHCARE_CENTRE Table (Centre Specific Information)
 CREATE TABLE `HEALTHCARE_CENTRE` (
   `Centre_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Provider_ID` INT NOT NULL UNIQUE,
@@ -103,21 +102,17 @@ CREATE TABLE `HEALTHCARE_CENTRE` (
     REFERENCES `PROVIDER` (`Provider_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
   INDEX `idx_centre_reg_no` (`Registration_No`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 6. CENTRE_DOCTOR_LINK Table (M:N Healthcare Centre to Doctor Link)
 CREATE TABLE `CENTRE_DOCTOR_LINK` (
   `Centre_ID` INT NOT NULL,
   `Doctor_ID` INT NOT NULL,
   `Joined_Date` DATE NOT NULL,
-  `Status` ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+  `Status` ENUM('PENDING', 'ACTIVE', 'INACTIVE', 'REJECTED') NOT NULL DEFAULT 'PENDING',
   PRIMARY KEY (`Centre_ID`, `Doctor_ID`),
   CONSTRAINT `fk_cdl_centre` FOREIGN KEY (`Centre_ID`) 
     REFERENCES `HEALTHCARE_CENTRE` (`Centre_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_cdl_doctor` FOREIGN KEY (`Doctor_ID`) 
     REFERENCES `DOCTOR` (`Doctor_ID`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 7. CITY Table (National City & GPS Geolocation Registry)
 CREATE TABLE `CITY` (
   `City_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `City_Name` VARCHAR(100) NOT NULL UNIQUE,
@@ -127,16 +122,12 @@ CREATE TABLE `CITY` (
   `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_city_name` (`City_Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 8. SPECIALIZATION Table
 CREATE TABLE `SPECIALIZATION` (
   `Specialization_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Name` VARCHAR(100) NOT NULL UNIQUE,
   `Description` TEXT NULL,
   INDEX `idx_specialization_name` (`Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 8. DOCTOR_SPECIALIZATION Table (M:N Doctor to Specialization)
 CREATE TABLE `DOCTOR_SPECIALIZATION` (
   `Doctor_ID` INT NOT NULL,
   `Specialization_ID` INT NOT NULL,
@@ -146,8 +137,6 @@ CREATE TABLE `DOCTOR_SPECIALIZATION` (
   CONSTRAINT `fk_ds_specialization` FOREIGN KEY (`Specialization_ID`) 
     REFERENCES `SPECIALIZATION` (`Specialization_ID`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 9. SUBSCRIPTION_PLAN Table
 CREATE TABLE `SUBSCRIPTION_PLAN` (
   `Plan_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Plan_Name` VARCHAR(100) NOT NULL,
@@ -161,8 +150,6 @@ CREATE TABLE `SUBSCRIPTION_PLAN` (
   `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_plan_status_role` (`Status`, `Target_Role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 10. USER_SUBSCRIPTION Table (Subscription History and Active Record)
 CREATE TABLE `USER_SUBSCRIPTION` (
   `User_Subscription_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `User_ID` INT NOT NULL,
@@ -178,8 +165,40 @@ CREATE TABLE `USER_SUBSCRIPTION` (
     REFERENCES `SUBSCRIPTION_PLAN` (`Plan_ID`) ON DELETE RESTRICT ON UPDATE CASCADE,
   INDEX `idx_us_user_status_dates` (`User_ID`, `Status`, `Start_Date`, `End_Date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `PROVIDER_PENDING_PLAN` (
+  `Provider_ID` INT NOT NULL PRIMARY KEY,
+  `Plan_ID` INT NOT NULL,
+  `Selected_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_pending_plan_provider` FOREIGN KEY (`Provider_ID`) REFERENCES `PROVIDER` (`Provider_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pending_plan_plan` FOREIGN KEY (`Plan_ID`) REFERENCES `SUBSCRIPTION_PLAN` (`Plan_ID`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 11. SCHEDULED_SLOT Table (Provider & Affiliated Doctor Slots)
+CREATE TABLE `PROVIDER_VERIFICATION_HISTORY` (
+  `Verification_History_ID` INT AUTO_INCREMENT PRIMARY KEY,
+  `Provider_ID` INT NOT NULL,
+  `Admin_User_ID` INT NOT NULL,
+  `Old_Status` ENUM('PENDING','VERIFIED','REJECTED') NOT NULL,
+  `New_Status` ENUM('PENDING','VERIFIED','REJECTED') NOT NULL,
+  `Reason` VARCHAR(500) NULL,
+  `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_pvh_provider` FOREIGN KEY (`Provider_ID`) REFERENCES `PROVIDER` (`Provider_ID`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pvh_admin` FOREIGN KEY (`Admin_User_ID`) REFERENCES `USER` (`User_ID`) ON DELETE RESTRICT,
+  INDEX `idx_pvh_provider_date` (`Provider_ID`,`Created_At`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `AUDIT_LOG` (
+  `Audit_ID` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `Actor_User_ID` INT NULL,
+  `Action_Type` VARCHAR(80) NOT NULL,
+  `Entity_Type` VARCHAR(80) NOT NULL,
+  `Entity_ID` VARCHAR(80) NULL,
+  `Details` VARCHAR(1000) NULL,
+  `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_audit_actor` FOREIGN KEY (`Actor_User_ID`) REFERENCES `USER` (`User_ID`) ON DELETE SET NULL,
+  INDEX `idx_audit_actor_date` (`Actor_User_ID`,`Created_At`),
+  INDEX `idx_audit_entity` (`Entity_Type`,`Entity_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `SCHEDULED_SLOT` (
   `Slot_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Provider_ID` INT NOT NULL,
@@ -196,14 +215,12 @@ CREATE TABLE `SCHEDULED_SLOT` (
   INDEX `idx_slot_provider_date_status` (`Provider_ID`, `Slot_Date`, `Status`),
   INDEX `idx_slot_date_status` (`Slot_Date`, `Status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 12. APPOINTMENT Table (Client Bookings with Unique Slot Constraint)
 CREATE TABLE `APPOINTMENT` (
   `Appointment_ID` INT AUTO_INCREMENT PRIMARY KEY,
   `Client_ID` INT NOT NULL,
   `Slot_ID` INT NOT NULL UNIQUE,
   `Booking_DateTime` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `Status` ENUM('BOOKED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW') NOT NULL DEFAULT 'BOOKED',
+  `Status` ENUM('PENDING', 'BOOKED', 'CONFIRMED', 'REJECTED', 'COMPLETED', 'CANCELLED', 'NO_SHOW') NOT NULL DEFAULT 'PENDING',
   `Notes` TEXT NULL,
   `Created_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `Updated_At` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -213,15 +230,6 @@ CREATE TABLE `APPOINTMENT` (
     REFERENCES `SCHEDULED_SLOT` (`Slot_ID`) ON DELETE RESTRICT ON UPDATE CASCADE,
   INDEX `idx_appt_client_status` (`Client_ID`, `Status`, `Booking_DateTime`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
--- =======================================================================
--- SEED DATA & REALISTIC SRI LANKAN DEMO RECORDS
--- Standard Demo Password for all accounts: Password123!
--- Bcrypt Hash: $2y$10$wT8K8U1y0VbZl7k2oQ7beOi2h7l9y0b2k5m6n7o8p9q0r1s2t3u4v
--- =======================================================================
-
--- Cities & GPS Geolocation Registry
 INSERT INTO `CITY` (`City_ID`, `City_Name`, `District`, `Latitude`, `Longitude`) VALUES
 (1, 'Colombo', 'Colombo', 6.92710000, 79.86120000),
 (2, 'Kandy', 'Kandy', 7.29060000, 80.63370000),
@@ -237,7 +245,21 @@ INSERT INTO `CITY` (`City_ID`, `City_Name`, `District`, `Latitude`, `Longitude`)
 (12, 'Badulla', 'Badulla', 6.99340000, 81.05500000),
 (13, 'Kalutara', 'Kalutara', 6.58540000, 79.96070000);
 
--- Specializations
+-- Additional district coverage for demo data
+INSERT INTO `CITY` (`City_ID`,`City_Name`,`District`,`Latitude`,`Longitude`) VALUES
+(101, 'Matale', 'Matale', 7.46750000, 80.62340000),
+(102, 'Nuwara Eliya', 'Nuwara Eliya', 6.94970000, 80.78910000),
+(103, 'Hambantota', 'Hambantota', 6.12410000, 81.11850000),
+(104, 'Kilinochchi', 'Kilinochchi', 9.38030000, 80.37700000),
+(105, 'Mannar', 'Mannar', 8.98100000, 79.90440000),
+(106, 'Vavuniya', 'Vavuniya', 8.75140000, 80.49710000),
+(107, 'Mullaitivu', 'Mullaitivu', 9.26710000, 80.81420000),
+(108, 'Ampara', 'Ampara', 7.29170000, 81.67240000),
+(109, 'Trincomalee', 'Trincomalee', 8.58740000, 81.21520000),
+(110, 'Puttalam', 'Puttalam', 8.03620000, 79.82830000),
+(111, 'Polonnaruwa', 'Polonnaruwa', 7.94030000, 81.01880000),
+(112, 'Monaragala', 'Monaragala', 6.87280000, 81.35070000),
+(113, 'Kegalle', 'Kegalle', 7.25130000, 80.34640000);
 INSERT INTO `SPECIALIZATION` (`Specialization_ID`, `Name`, `Description`) VALUES
 (1, 'General Medicine', 'Primary care, diagnosis, preventive health and general wellness management.'),
 (2, 'Cardiology', 'Specialized heart care, cardiovascular diseases, hypertension and ECG evaluations.'),
@@ -247,380 +269,1079 @@ INSERT INTO `SPECIALIZATION` (`Specialization_ID`, `Name`, `Description`) VALUES
 (6, 'Orthopedics', 'Bone, joint, spine disorders, sports injuries, and musculoskeletal care.'),
 (7, 'Psychiatry', 'Mental wellness, counseling, stress management, and behavioral health.'),
 (8, 'Gynecology & Obstetrics', 'Women health, prenatal care, maternity wellness, and reproductive health.');
-
--- Subscription Plans (LKR Currency)
--- Client Plans are Annual (365 Days), Provider/Doctor Plans are Monthly (30 Days)
 INSERT INTO `SUBSCRIPTION_PLAN` (`Plan_ID`, `Plan_Name`, `Target_Role`, `Price`, `Duration_Days`, `Max_Book_per_Month`, `Search_Radius_KM`, `Description`, `Status`) VALUES
 (1, 'Basic Care Annual Plan', 'CLIENT', 15000.00, 365, 5, 10, 'Ideal for individuals. 5 appointments per month and 10 km location radius. Billed annually.', 'ACTIVE'),
 (2, 'Standard Family Annual Plan', 'CLIENT', 35000.00, 365, 15, 25, 'Great for families. 15 appointments per month and 25 km extended search radius. Billed annually.', 'ACTIVE'),
 (3, 'Premium Platinum Annual Plan', 'CLIENT', 60000.00, 365, 30, 60, 'Maximum flexibility. 30 appointments per month and island-wide 60 km search radius with priority support. Billed annually.', 'ACTIVE'),
-(4, 'Provider Professional Monthly Plan', 'PROVIDER', 5000.00, 30, 999, 100, 'Full verified directory listing, unlimited slots, and patient booking management. Billed monthly.', 'ACTIVE');
-
--- Demo Users (Password: Password123!)
--- Bcrypt Hash: $2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u
+(4, 'Provider Starter Monthly Plan', 'PROVIDER', 2500.00, 30, 100, 100, 'Essential verified provider listing, appointment management, and up to 100 booking requests per month.', 'ACTIVE'),
+(5, 'Provider Professional Monthly Plan', 'PROVIDER', 5000.00, 30, 300, 100, 'For growing practices with recurring schedule tools and up to 300 booking requests per month.', 'ACTIVE'),
+(6, 'Provider Premium Monthly Plan', 'PROVIDER', 8500.00, 30, 999, 100, 'Full provider experience with high-volume appointment management and priority positioning features.', 'ACTIVE');
 INSERT INTO `USER` (`User_ID`, `Email`, `Password_Hash`, `First_Name`, `Last_Name`, `Phone`, `NIC_No`, `Role_Type`, `Account_Status`) VALUES
--- 1: System Admin
+(9001, 'owner@medilink.lk', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'MediLink', 'Owner', '0770000000', '198000000001', 'OWNER', 'ACTIVE'),
 (1, 'admin@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Kasun', 'Perera', '0771234567', '198012345678', 'SYSTEM_ADMIN', 'ACTIVE'),
--- 2: Client with Active Subscription (Colombo)
 (2, 'client@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Nimal', 'Silva', '0777654321', '199214502391', 'CLIENT', 'ACTIVE'),
--- 3: Client with Expired Subscription (Kandy)
 (3, 'expired.client@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Sunil', 'Fernando', '0712345678', '198829301928', 'CLIENT', 'ACTIVE'),
--- 4: Doctor (Cardiologist in Colombo)
 (4, 'doctor@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Ruwan', 'Jayasinghe', '0779876543', '197548201948', 'PROVIDER', 'ACTIVE'),
--- 5: Doctor (Pediatrician in Kandy)
 (5, 'pediatrician@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Anoma', 'Weerasinghe', '0765432109', '198129402910', 'PROVIDER', 'ACTIVE'),
--- 6: Doctor (Dermatologist in Negombo)
 (6, 'dermatologist@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Chaminda', 'Bandara', '0751239876', '197938491029', 'PROVIDER', 'ACTIVE'),
--- 7: Healthcare Centre (Colombo 07)
 (7, 'centre@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Lanka Care', 'Medical Centre', '0112345678', '198429102948', 'PROVIDER', 'ACTIVE'),
--- 8: Healthcare Centre (Kandy)
 (8, 'kandy.centre@example.com', '$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u', 'Suwasevana', 'Health Complex', '0812233445', '198739102938', 'PROVIDER', 'ACTIVE');
-
--- Client Profiles
 INSERT INTO `CLIENT` (`Client_ID`, `User_ID`, `Date_of_Birth`, `Gender`, `Address`, `City`, `Latitude`, `Longitude`) VALUES
 (1, 2, '1990-05-15', 'MALE', '45/2 Galle Road, Bambalapitiya', 'Colombo', 6.89610000, 79.85720000),
 (2, 3, '1985-09-22', 'MALE', '120 Peradeniya Road', 'Kandy', 7.28450000, 80.62000000);
-
--- Provider Base Profiles
-INSERT INTO `PROVIDER` (`Provider_ID`, `User_ID`, `Provider_Type`, `Business_Name`, `Address`, `City`, `Latitude`, `Longitude`, `Consultation_Fee`, `Contact_Number`, `Description`, `Verification_Status`) VALUES
--- Doctor 1 (Dr. Ruwan - Colombo)
-(1, 4, 'DOCTOR', 'Dr. Ruwan Jayasinghe Cardiology Clinic', '75 Ward Place', 'Colombo', 6.91820000, 79.86850000, 2500.00, '0779876543', 'Consultant Cardiologist with over 15 years experience in adult cardiology, hypertension, and preventive cardiology.', 'VERIFIED'),
--- Doctor 2 (Dr. Anoma - Kandy)
-(2, 5, 'DOCTOR', 'Dr. Anoma Weerasinghe Child Care', '28 William Gopallawa Mawatha', 'Kandy', 7.28900000, 80.63000000, 2200.00, '0765432109', 'Senior Consultant Pediatrician dedicated to holistic child wellness, growth tracking, and childhood illnesses.', 'VERIFIED'),
--- Doctor 3 (Dr. Chaminda - Negombo)
-(3, 6, 'DOCTOR', 'Dr. Chaminda Skin & Laser Clinic', '88 Main Street', 'Negombo', 7.20850000, 79.83900000, 2000.00, '0751239876', 'Specialist Dermatologist offering clinical dermatology, eczema treatments, and aesthetic skincare.', 'VERIFIED'),
--- Centre 1 (Lanka Care - Colombo)
-(4, 7, 'HEALTHCARE_CENTRE', 'Lanka Care Specialist Medical Centre', '142 Horton Place', 'Colombo', 6.91450000, 79.87300000, 1500.00, '0112345678', 'Multi-specialty primary care and diagnostic centre with modern laboratory and outpatient consulting rooms.', 'VERIFIED'),
--- Centre 2 (Suwasevana - Kandy)
-(5, 8, 'HEALTHCARE_CENTRE', 'Suwasevana Health Complex', '50 Peradeniya Road', 'Kandy', 7.28650000, 80.62500000, 1800.00, '0812233445', 'Central Province flagship clinical care facility with 24/7 specialist doctor consultation suites.', 'VERIFIED');
-
--- Doctor Specific Records
+INSERT INTO `PROVIDER` (`Provider_ID`, `User_ID`, `Provider_Type`, `Business_Name`, `Address`, `City`, `Latitude`, `Longitude`, `Contact_Number`, `Description`, `Verification_Status`) VALUES
+(1, 4, 'DOCTOR', 'Dr. Ruwan Jayasinghe Cardiology Clinic', '75 Ward Place', 'Colombo', 6.91820000, 79.86850000, '0779876543', 'Consultant Cardiologist with over 15 years experience in adult cardiology, hypertension, and preventive cardiology.', 'VERIFIED'),
+(2, 5, 'DOCTOR', 'Dr. Anoma Weerasinghe Child Care', '28 William Gopallawa Mawatha', 'Kandy', 7.28900000, 80.63000000, '0765432109', 'Senior Consultant Pediatrician dedicated to holistic child wellness, growth tracking, and childhood illnesses.', 'VERIFIED'),
+(3, 6, 'DOCTOR', 'Dr. Chaminda Skin & Laser Clinic', '88 Main Street', 'Negombo', 7.20850000, 79.83900000, '0751239876', 'Specialist Dermatologist offering clinical dermatology, eczema treatments, and aesthetic skincare.', 'VERIFIED'),
+(4, 7, 'HEALTHCARE_CENTRE', 'Lanka Care Specialist Medical Centre', '142 Horton Place', 'Colombo', 6.91450000, 79.87300000, '0112345678', 'Multi-specialty primary care and diagnostic centre with modern laboratory and outpatient consulting rooms.', 'VERIFIED'),
+(5, 8, 'HEALTHCARE_CENTRE', 'Suwasevana Health Complex', '50 Peradeniya Road', 'Kandy', 7.28650000, 80.62500000, '0812233445', 'Central Province flagship clinical care facility with 24/7 specialist doctor consultation suites.', 'VERIFIED');
 INSERT INTO `DOCTOR` (`Doctor_ID`, `Provider_ID`, `Medical_License_No`, `Professional_Bio`, `Experience_Years`, `Consultation_Duration`, `Verification_Status`) VALUES
 (1, 1, 'SLMC-34921', 'MBBS (Colombo), MD (Cardiology), MRCP (UK). Senior Cardiologist at National Hospital.', 16, 20, 'VERIFIED'),
 (2, 2, 'SLMC-28490', 'MBBS (Peradeniya), DCH, MD (Pediatrics). Consultant Pediatrician at Kandy General Hospital.', 12, 15, 'VERIFIED'),
 (3, 3, 'SLMC-41052', 'MBBS (Kelaniya), MD (Dermatology). Specialist in advanced dermatological therapies.', 9, 20, 'VERIFIED');
-
--- Healthcare Centre Specific Records
 INSERT INTO `HEALTHCARE_CENTRE` (`Centre_ID`, `Provider_ID`, `Centre_Name`, `Registration_No`, `Description`, `Verification_Status`) VALUES
 (1, 4, 'Lanka Care Specialist Medical Centre', 'PHSRC/HC/2023/104', 'Premier outpatient and specialized healthcare facility in Colombo 07.', 'VERIFIED'),
 (2, 5, 'Suwasevana Health Complex', 'PHSRC/HC/2021/058', 'Central Province flagship clinical care facility with 24/7 support.', 'VERIFIED');
-
--- Doctor Specializations Link
 INSERT INTO `DOCTOR_SPECIALIZATION` (`Doctor_ID`, `Specialization_ID`) VALUES
 (1, 2), -- Dr. Ruwan -> Cardiology
 (1, 1), -- Dr. Ruwan -> General Medicine
 (2, 3), -- Dr. Anoma -> Pediatrics
 (3, 4); -- Dr. Chaminda -> Dermatology
-
--- Healthcare Centre Doctor Links (Affiliations)
 INSERT INTO `CENTRE_DOCTOR_LINK` (`Centre_ID`, `Doctor_ID`, `Joined_Date`, `Status`) VALUES
 (1, 1, '2023-01-10', 'ACTIVE'), -- Dr. Ruwan consults at Lanka Care Colombo
 (2, 2, '2023-03-15', 'ACTIVE'); -- Dr. Anoma consults at Suwasevana Kandy
 
--- User Subscriptions
+
+-- ============================================================
+-- MEDILINK SYNTHETIC ISLAND-WIDE DEMO DIRECTORY
+-- All names, licence numbers, contacts, centres and biographies
+-- below are FICTIONAL test data, not real medical practitioners.
+-- Coverage: 25 districts, 3 doctors + 3 centres per district.
+-- ============================================================
+INSERT INTO `USER` (`User_ID`,`Email`,`Password_Hash`,`First_Name`,`Last_Name`,`Phone`,`NIC_No`,`Role_Type`,`Account_Status`) VALUES
+(1000,'demo.doctor.01.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Aarav','Perera','0711000000','DEMO-NIC-D-011','PROVIDER','ACTIVE'),
+(1001,'demo.doctor.01.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Nethmi','Jayawardena','0721000137','DEMO-NIC-D-012','PROVIDER','ACTIVE'),
+(1002,'demo.doctor.01.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Kavindu','Samarasinghe','0731000274','DEMO-NIC-D-013','PROVIDER','ACTIVE'),
+(1003,'demo.centre.01.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','ColomboCentre1','0112000000','DEMO-NIC-C-011','PROVIDER','ACTIVE'),
+(1004,'demo.centre.01.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','ColomboCentre2','0112000251','DEMO-NIC-C-012','PROVIDER','ACTIVE'),
+(1005,'demo.centre.01.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','ColomboCentre3','0112000502','DEMO-NIC-C-013','PROVIDER','ACTIVE'),
+(1006,'demo.doctor.02.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Tharushi','Bandara','0721001000','DEMO-NIC-D-021','PROVIDER','ACTIVE'),
+(1007,'demo.doctor.02.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Dilan','Senanayake','0731001137','DEMO-NIC-D-022','PROVIDER','ACTIVE'),
+(1008,'demo.doctor.02.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Sachini','Sivakumar','0741001274','DEMO-NIC-D-023','PROVIDER','ACTIVE'),
+(1009,'demo.centre.02.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','GampahaCentre1','0122001000','DEMO-NIC-C-021','PROVIDER','ACTIVE'),
+(1010,'demo.centre.02.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','GampahaCentre2','0122001251','DEMO-NIC-C-022','PROVIDER','ACTIVE'),
+(1011,'demo.centre.02.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','GampahaCentre3','0122001502','DEMO-NIC-C-023','PROVIDER','ACTIVE'),
+(1012,'demo.doctor.03.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Arun','Thiruchelvam','0731002000','DEMO-NIC-D-031','PROVIDER','ACTIVE'),
+(1013,'demo.doctor.03.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Meena','Ramanathan','0741002137','DEMO-NIC-D-032','PROVIDER','ACTIVE'),
+(1014,'demo.doctor.03.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Rizwan','Faleel','0751002274','DEMO-NIC-D-033','PROVIDER','ACTIVE'),
+(1015,'demo.centre.03.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KalutaraCentre1','0132002000','DEMO-NIC-C-031','PROVIDER','ACTIVE'),
+(1016,'demo.centre.03.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KalutaraCentre2','0132002251','DEMO-NIC-C-032','PROVIDER','ACTIVE'),
+(1017,'demo.centre.03.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KalutaraCentre3','0132002502','DEMO-NIC-C-033','PROVIDER','ACTIVE'),
+(1018,'demo.doctor.04.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Fathima','Rizvi','0741003000','DEMO-NIC-D-041','PROVIDER','ACTIVE'),
+(1019,'demo.doctor.04.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Janith','Pathirana','0751003137','DEMO-NIC-D-042','PROVIDER','ACTIVE'),
+(1020,'demo.doctor.04.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Ishara','Dissanayake','0761003274','DEMO-NIC-D-043','PROVIDER','ACTIVE'),
+(1021,'demo.centre.04.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KandyCentre1','0142003000','DEMO-NIC-C-041','PROVIDER','ACTIVE'),
+(1022,'demo.centre.04.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KandyCentre2','0142003251','DEMO-NIC-C-042','PROVIDER','ACTIVE'),
+(1023,'demo.centre.04.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KandyCentre3','0142003502','DEMO-NIC-C-043','PROVIDER','ACTIVE'),
+(1024,'demo.doctor.05.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Niroshan','Herath','0751004000','DEMO-NIC-D-051','PROVIDER','ACTIVE'),
+(1025,'demo.doctor.05.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Pavithra','Karunaratne','0761004137','DEMO-NIC-D-052','PROVIDER','ACTIVE'),
+(1026,'demo.doctor.05.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Suren','Fernando','0771004274','DEMO-NIC-D-053','PROVIDER','ACTIVE'),
+(1027,'demo.centre.05.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MataleCentre1','0152004000','DEMO-NIC-C-051','PROVIDER','ACTIVE'),
+(1028,'demo.centre.05.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MataleCentre2','0152004251','DEMO-NIC-C-052','PROVIDER','ACTIVE'),
+(1029,'demo.centre.05.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MataleCentre3','0152004502','DEMO-NIC-C-053','PROVIDER','ACTIVE'),
+(1030,'demo.doctor.06.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Keshani','Perera','0761005000','DEMO-NIC-D-061','PROVIDER','ACTIVE'),
+(1031,'demo.doctor.06.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Imran','Jayawardena','0771005137','DEMO-NIC-D-062','PROVIDER','ACTIVE'),
+(1032,'demo.doctor.06.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Ayesha','Samarasinghe','0781005274','DEMO-NIC-D-063','PROVIDER','ACTIVE'),
+(1033,'demo.centre.06.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','NuwaraEliyaCentre1','0162005000','DEMO-NIC-C-061','PROVIDER','ACTIVE'),
+(1034,'demo.centre.06.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','NuwaraEliyaCentre2','0162005251','DEMO-NIC-C-062','PROVIDER','ACTIVE'),
+(1035,'demo.centre.06.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','NuwaraEliyaCentre3','0162005502','DEMO-NIC-C-063','PROVIDER','ACTIVE'),
+(1036,'demo.doctor.07.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Thivyan','Bandara','0771006000','DEMO-NIC-D-071','PROVIDER','ACTIVE'),
+(1037,'demo.doctor.07.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Harini','Senanayake','0781006137','DEMO-NIC-D-072','PROVIDER','ACTIVE'),
+(1038,'demo.doctor.07.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Malith','Sivakumar','0711006274','DEMO-NIC-D-073','PROVIDER','ACTIVE'),
+(1039,'demo.centre.07.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','GalleCentre1','0172006000','DEMO-NIC-C-071','PROVIDER','ACTIVE'),
+(1040,'demo.centre.07.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','GalleCentre2','0172006251','DEMO-NIC-C-072','PROVIDER','ACTIVE'),
+(1041,'demo.centre.07.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','GalleCentre3','0172006502','DEMO-NIC-C-073','PROVIDER','ACTIVE'),
+(1042,'demo.doctor.08.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Dinithi','Thiruchelvam','0781007000','DEMO-NIC-D-081','PROVIDER','ACTIVE'),
+(1043,'demo.doctor.08.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Roshan','Ramanathan','0711007137','DEMO-NIC-D-082','PROVIDER','ACTIVE'),
+(1044,'demo.doctor.08.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Shalini','Faleel','0721007274','DEMO-NIC-D-083','PROVIDER','ACTIVE'),
+(1045,'demo.centre.08.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MataraCentre1','0182007000','DEMO-NIC-C-081','PROVIDER','ACTIVE'),
+(1046,'demo.centre.08.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MataraCentre2','0182007251','DEMO-NIC-C-082','PROVIDER','ACTIVE'),
+(1047,'demo.centre.08.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MataraCentre3','0182007502','DEMO-NIC-C-083','PROVIDER','ACTIVE'),
+(1048,'demo.doctor.09.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Naveen','Rizvi','0711008000','DEMO-NIC-D-091','PROVIDER','ACTIVE'),
+(1049,'demo.doctor.09.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Gayathri','Pathirana','0721008137','DEMO-NIC-D-092','PROVIDER','ACTIVE'),
+(1050,'demo.doctor.09.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Akeel','Dissanayake','0731008274','DEMO-NIC-D-093','PROVIDER','ACTIVE'),
+(1051,'demo.centre.09.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','HambantotaCentre1','0112008000','DEMO-NIC-C-091','PROVIDER','ACTIVE'),
+(1052,'demo.centre.09.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','HambantotaCentre2','0112008251','DEMO-NIC-C-092','PROVIDER','ACTIVE'),
+(1053,'demo.centre.09.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','HambantotaCentre3','0112008502','DEMO-NIC-C-093','PROVIDER','ACTIVE'),
+(1054,'demo.doctor.10.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Nafla','Herath','0721009000','DEMO-NIC-D-101','PROVIDER','ACTIVE'),
+(1055,'demo.doctor.10.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Praveen','Karunaratne','0731009137','DEMO-NIC-D-102','PROVIDER','ACTIVE'),
+(1056,'demo.doctor.10.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Yasara','Fernando','0741009274','DEMO-NIC-D-103','PROVIDER','ACTIVE'),
+(1057,'demo.centre.10.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','JaffnaCentre1','0122009000','DEMO-NIC-C-101','PROVIDER','ACTIVE'),
+(1058,'demo.centre.10.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','JaffnaCentre2','0122009251','DEMO-NIC-C-102','PROVIDER','ACTIVE'),
+(1059,'demo.centre.10.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','JaffnaCentre3','0122009502','DEMO-NIC-C-103','PROVIDER','ACTIVE'),
+(1060,'demo.doctor.11.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Aarav','Perera','0731010000','DEMO-NIC-D-111','PROVIDER','ACTIVE'),
+(1061,'demo.doctor.11.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Nethmi','Jayawardena','0741010137','DEMO-NIC-D-112','PROVIDER','ACTIVE'),
+(1062,'demo.doctor.11.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Kavindu','Samarasinghe','0751010274','DEMO-NIC-D-113','PROVIDER','ACTIVE'),
+(1063,'demo.centre.11.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KilinochchiCentre1','0132010000','DEMO-NIC-C-111','PROVIDER','ACTIVE'),
+(1064,'demo.centre.11.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KilinochchiCentre2','0132010251','DEMO-NIC-C-112','PROVIDER','ACTIVE'),
+(1065,'demo.centre.11.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KilinochchiCentre3','0132010502','DEMO-NIC-C-113','PROVIDER','ACTIVE'),
+(1066,'demo.doctor.12.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Tharushi','Bandara','0741011000','DEMO-NIC-D-121','PROVIDER','ACTIVE'),
+(1067,'demo.doctor.12.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Dilan','Senanayake','0751011137','DEMO-NIC-D-122','PROVIDER','ACTIVE'),
+(1068,'demo.doctor.12.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Sachini','Sivakumar','0761011274','DEMO-NIC-D-123','PROVIDER','ACTIVE'),
+(1069,'demo.centre.12.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MannarCentre1','0142011000','DEMO-NIC-C-121','PROVIDER','ACTIVE'),
+(1070,'demo.centre.12.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MannarCentre2','0142011251','DEMO-NIC-C-122','PROVIDER','ACTIVE'),
+(1071,'demo.centre.12.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MannarCentre3','0142011502','DEMO-NIC-C-123','PROVIDER','ACTIVE'),
+(1072,'demo.doctor.13.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Arun','Thiruchelvam','0751012000','DEMO-NIC-D-131','PROVIDER','ACTIVE'),
+(1073,'demo.doctor.13.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Meena','Ramanathan','0761012137','DEMO-NIC-D-132','PROVIDER','ACTIVE'),
+(1074,'demo.doctor.13.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Rizwan','Faleel','0771012274','DEMO-NIC-D-133','PROVIDER','ACTIVE'),
+(1075,'demo.centre.13.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','VavuniyaCentre1','0152012000','DEMO-NIC-C-131','PROVIDER','ACTIVE'),
+(1076,'demo.centre.13.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','VavuniyaCentre2','0152012251','DEMO-NIC-C-132','PROVIDER','ACTIVE'),
+(1077,'demo.centre.13.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','VavuniyaCentre3','0152012502','DEMO-NIC-C-133','PROVIDER','ACTIVE'),
+(1078,'demo.doctor.14.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Fathima','Rizvi','0761013000','DEMO-NIC-D-141','PROVIDER','ACTIVE'),
+(1079,'demo.doctor.14.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Janith','Pathirana','0771013137','DEMO-NIC-D-142','PROVIDER','ACTIVE'),
+(1080,'demo.doctor.14.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Ishara','Dissanayake','0781013274','DEMO-NIC-D-143','PROVIDER','ACTIVE'),
+(1081,'demo.centre.14.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MullaitivuCentre1','0162013000','DEMO-NIC-C-141','PROVIDER','ACTIVE'),
+(1082,'demo.centre.14.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MullaitivuCentre2','0162013251','DEMO-NIC-C-142','PROVIDER','ACTIVE'),
+(1083,'demo.centre.14.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MullaitivuCentre3','0162013502','DEMO-NIC-C-143','PROVIDER','ACTIVE'),
+(1084,'demo.doctor.15.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Niroshan','Herath','0771014000','DEMO-NIC-D-151','PROVIDER','ACTIVE'),
+(1085,'demo.doctor.15.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Pavithra','Karunaratne','0781014137','DEMO-NIC-D-152','PROVIDER','ACTIVE'),
+(1086,'demo.doctor.15.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Suren','Fernando','0711014274','DEMO-NIC-D-153','PROVIDER','ACTIVE'),
+(1087,'demo.centre.15.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','BatticaloaCentre1','0172014000','DEMO-NIC-C-151','PROVIDER','ACTIVE'),
+(1088,'demo.centre.15.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','BatticaloaCentre2','0172014251','DEMO-NIC-C-152','PROVIDER','ACTIVE'),
+(1089,'demo.centre.15.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','BatticaloaCentre3','0172014502','DEMO-NIC-C-153','PROVIDER','ACTIVE'),
+(1090,'demo.doctor.16.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Keshani','Perera','0781015000','DEMO-NIC-D-161','PROVIDER','ACTIVE'),
+(1091,'demo.doctor.16.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Imran','Jayawardena','0711015137','DEMO-NIC-D-162','PROVIDER','ACTIVE'),
+(1092,'demo.doctor.16.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Ayesha','Samarasinghe','0721015274','DEMO-NIC-D-163','PROVIDER','ACTIVE'),
+(1093,'demo.centre.16.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','AmparaCentre1','0182015000','DEMO-NIC-C-161','PROVIDER','ACTIVE'),
+(1094,'demo.centre.16.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','AmparaCentre2','0182015251','DEMO-NIC-C-162','PROVIDER','ACTIVE'),
+(1095,'demo.centre.16.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','AmparaCentre3','0182015502','DEMO-NIC-C-163','PROVIDER','ACTIVE'),
+(1096,'demo.doctor.17.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Thivyan','Bandara','0711016000','DEMO-NIC-D-171','PROVIDER','ACTIVE'),
+(1097,'demo.doctor.17.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Harini','Senanayake','0721016137','DEMO-NIC-D-172','PROVIDER','ACTIVE'),
+(1098,'demo.doctor.17.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Malith','Sivakumar','0731016274','DEMO-NIC-D-173','PROVIDER','ACTIVE'),
+(1099,'demo.centre.17.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','TrincomaleeCentre1','0112016000','DEMO-NIC-C-171','PROVIDER','ACTIVE'),
+(1100,'demo.centre.17.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','TrincomaleeCentre2','0112016251','DEMO-NIC-C-172','PROVIDER','ACTIVE'),
+(1101,'demo.centre.17.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','TrincomaleeCentre3','0112016502','DEMO-NIC-C-173','PROVIDER','ACTIVE'),
+(1102,'demo.doctor.18.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Dinithi','Thiruchelvam','0721017000','DEMO-NIC-D-181','PROVIDER','ACTIVE'),
+(1103,'demo.doctor.18.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Roshan','Ramanathan','0731017137','DEMO-NIC-D-182','PROVIDER','ACTIVE'),
+(1104,'demo.doctor.18.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Shalini','Faleel','0741017274','DEMO-NIC-D-183','PROVIDER','ACTIVE'),
+(1105,'demo.centre.18.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KurunegalaCentre1','0122017000','DEMO-NIC-C-181','PROVIDER','ACTIVE'),
+(1106,'demo.centre.18.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KurunegalaCentre2','0122017251','DEMO-NIC-C-182','PROVIDER','ACTIVE'),
+(1107,'demo.centre.18.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KurunegalaCentre3','0122017502','DEMO-NIC-C-183','PROVIDER','ACTIVE'),
+(1108,'demo.doctor.19.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Naveen','Rizvi','0731018000','DEMO-NIC-D-191','PROVIDER','ACTIVE'),
+(1109,'demo.doctor.19.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Gayathri','Pathirana','0741018137','DEMO-NIC-D-192','PROVIDER','ACTIVE'),
+(1110,'demo.doctor.19.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Akeel','Dissanayake','0751018274','DEMO-NIC-D-193','PROVIDER','ACTIVE'),
+(1111,'demo.centre.19.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','PuttalamCentre1','0132018000','DEMO-NIC-C-191','PROVIDER','ACTIVE'),
+(1112,'demo.centre.19.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','PuttalamCentre2','0132018251','DEMO-NIC-C-192','PROVIDER','ACTIVE'),
+(1113,'demo.centre.19.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','PuttalamCentre3','0132018502','DEMO-NIC-C-193','PROVIDER','ACTIVE'),
+(1114,'demo.doctor.20.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Nafla','Herath','0741019000','DEMO-NIC-D-201','PROVIDER','ACTIVE'),
+(1115,'demo.doctor.20.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Praveen','Karunaratne','0751019137','DEMO-NIC-D-202','PROVIDER','ACTIVE'),
+(1116,'demo.doctor.20.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Yasara','Fernando','0761019274','DEMO-NIC-D-203','PROVIDER','ACTIVE'),
+(1117,'demo.centre.20.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','AnuradhapuraCentre1','0142019000','DEMO-NIC-C-201','PROVIDER','ACTIVE'),
+(1118,'demo.centre.20.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','AnuradhapuraCentre2','0142019251','DEMO-NIC-C-202','PROVIDER','ACTIVE'),
+(1119,'demo.centre.20.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','AnuradhapuraCentre3','0142019502','DEMO-NIC-C-203','PROVIDER','ACTIVE'),
+(1120,'demo.doctor.21.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Aarav','Perera','0751020000','DEMO-NIC-D-211','PROVIDER','ACTIVE'),
+(1121,'demo.doctor.21.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Nethmi','Jayawardena','0761020137','DEMO-NIC-D-212','PROVIDER','ACTIVE'),
+(1122,'demo.doctor.21.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Kavindu','Samarasinghe','0771020274','DEMO-NIC-D-213','PROVIDER','ACTIVE'),
+(1123,'demo.centre.21.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','PolonnaruwaCentre1','0152020000','DEMO-NIC-C-211','PROVIDER','ACTIVE'),
+(1124,'demo.centre.21.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','PolonnaruwaCentre2','0152020251','DEMO-NIC-C-212','PROVIDER','ACTIVE'),
+(1125,'demo.centre.21.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','PolonnaruwaCentre3','0152020502','DEMO-NIC-C-213','PROVIDER','ACTIVE'),
+(1126,'demo.doctor.22.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Tharushi','Bandara','0761021000','DEMO-NIC-D-221','PROVIDER','ACTIVE'),
+(1127,'demo.doctor.22.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Dilan','Senanayake','0771021137','DEMO-NIC-D-222','PROVIDER','ACTIVE'),
+(1128,'demo.doctor.22.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Sachini','Sivakumar','0781021274','DEMO-NIC-D-223','PROVIDER','ACTIVE'),
+(1129,'demo.centre.22.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','BadullaCentre1','0162021000','DEMO-NIC-C-221','PROVIDER','ACTIVE'),
+(1130,'demo.centre.22.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','BadullaCentre2','0162021251','DEMO-NIC-C-222','PROVIDER','ACTIVE'),
+(1131,'demo.centre.22.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','BadullaCentre3','0162021502','DEMO-NIC-C-223','PROVIDER','ACTIVE'),
+(1132,'demo.doctor.23.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Arun','Thiruchelvam','0771022000','DEMO-NIC-D-231','PROVIDER','ACTIVE'),
+(1133,'demo.doctor.23.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Meena','Ramanathan','0781022137','DEMO-NIC-D-232','PROVIDER','ACTIVE'),
+(1134,'demo.doctor.23.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Rizwan','Faleel','0711022274','DEMO-NIC-D-233','PROVIDER','ACTIVE'),
+(1135,'demo.centre.23.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MonaragalaCentre1','0172022000','DEMO-NIC-C-231','PROVIDER','ACTIVE'),
+(1136,'demo.centre.23.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MonaragalaCentre2','0172022251','DEMO-NIC-C-232','PROVIDER','ACTIVE'),
+(1137,'demo.centre.23.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','MonaragalaCentre3','0172022502','DEMO-NIC-C-233','PROVIDER','ACTIVE'),
+(1138,'demo.doctor.24.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Fathima','Rizvi','0781023000','DEMO-NIC-D-241','PROVIDER','ACTIVE'),
+(1139,'demo.doctor.24.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Janith','Pathirana','0711023137','DEMO-NIC-D-242','PROVIDER','ACTIVE'),
+(1140,'demo.doctor.24.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Ishara','Dissanayake','0721023274','DEMO-NIC-D-243','PROVIDER','ACTIVE'),
+(1141,'demo.centre.24.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','RatnapuraCentre1','0182023000','DEMO-NIC-C-241','PROVIDER','ACTIVE'),
+(1142,'demo.centre.24.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','RatnapuraCentre2','0182023251','DEMO-NIC-C-242','PROVIDER','ACTIVE'),
+(1143,'demo.centre.24.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','RatnapuraCentre3','0182023502','DEMO-NIC-C-243','PROVIDER','ACTIVE'),
+(1144,'demo.doctor.25.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Niroshan','Herath','0711024000','DEMO-NIC-D-251','PROVIDER','ACTIVE'),
+(1145,'demo.doctor.25.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Pavithra','Karunaratne','0721024137','DEMO-NIC-D-252','PROVIDER','ACTIVE'),
+(1146,'demo.doctor.25.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Suren','Fernando','0731024274','DEMO-NIC-D-253','PROVIDER','ACTIVE'),
+(1147,'demo.centre.25.1@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KegalleCentre1','0112024000','DEMO-NIC-C-251','PROVIDER','ACTIVE'),
+(1148,'demo.centre.25.2@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KegalleCentre2','0112024251','DEMO-NIC-C-252','PROVIDER','ACTIVE'),
+(1149,'demo.centre.25.3@medilink.demo','$2y$10$qlIneiFjSMcG8G/ETAK73O9ZNbHLJ2zuQS.YeCNyFTB7U5kVpbi4u','Demo','KegalleCentre3','0112024502','DEMO-NIC-C-253','PROVIDER','ACTIVE');
+INSERT INTO `PROVIDER` (`Provider_ID`,`User_ID`,`Provider_Type`,`Business_Name`,`Address`,`City`,`Latitude`,`Longitude`,`Contact_Number`,`Description`,`Verification_Status`) VALUES
+(1000,1000,'DOCTOR','Dr. Aarav Perera - General & Family Clinic','20, Colombo Main Road, Colombo','Colombo',6.92310000,79.86520000,'0711000000','Demo profile for a fictional doctor serving Colombo District.','VERIFIED'),
+(1001,1001,'DOCTOR','Dr. Nethmi Jayawardena - Specialist Consultation','31, Colombo Main Road, Colombo','Colombo',6.92710000,79.86120000,'0721000137','Demo profile for a fictional doctor serving Colombo District.','VERIFIED'),
+(1002,1002,'DOCTOR','Dr. Kavindu Samarasinghe - Medical Practice','42, Colombo Main Road, Colombo','Colombo',6.93110000,79.85720000,'0731000274','Demo profile for a fictional doctor serving Colombo District.','VERIFIED'),
+(1003,1003,'HEALTHCARE_CENTRE','MediCare Colombo Medical Centre 1','50, Healthcare Avenue, Colombo','Colombo',6.92110000,79.86620000,'0112000000','Fictional demonstration healthcare centre for Colombo District.','VERIFIED'),
+(1004,1004,'HEALTHCARE_CENTRE','Suwasetha Colombo Medical Centre 2','67, Healthcare Avenue, Colombo','Colombo',6.92710000,79.86120000,'0112000251','Fictional demonstration healthcare centre for Colombo District.','VERIFIED'),
+(1005,1005,'HEALTHCARE_CENTRE','Lanka Health Colombo Medical Centre 3','84, Healthcare Avenue, Colombo','Colombo',6.93310000,79.85620000,'0112000502','Fictional demonstration healthcare centre for Colombo District.','VERIFIED'),
+(1006,1006,'DOCTOR','Dr. Tharushi Bandara - General & Family Clinic','20, Gampaha Main Road, Gampaha','Gampaha',7.08000000,79.99790000,'0721001000','Demo profile for a fictional doctor serving Gampaha District.','VERIFIED'),
+(1007,1007,'DOCTOR','Dr. Dilan Senanayake - Specialist Consultation','31, Gampaha Main Road, Gampaha','Gampaha',7.08400000,79.99390000,'0731001137','Demo profile for a fictional doctor serving Gampaha District.','VERIFIED'),
+(1008,1008,'DOCTOR','Dr. Sachini Sivakumar - Medical Practice','42, Gampaha Main Road, Gampaha','Gampaha',7.08800000,79.98990000,'0741001274','Demo profile for a fictional doctor serving Gampaha District.','VERIFIED'),
+(1009,1009,'HEALTHCARE_CENTRE','Suwasetha Gampaha Medical Centre 1','50, Healthcare Avenue, Gampaha','Gampaha',7.07800000,79.99890000,'0122001000','Fictional demonstration healthcare centre for Gampaha District.','VERIFIED'),
+(1010,1010,'HEALTHCARE_CENTRE','Lanka Health Gampaha Medical Centre 2','67, Healthcare Avenue, Gampaha','Gampaha',7.08400000,79.99390000,'0122001251','Fictional demonstration healthcare centre for Gampaha District.','VERIFIED'),
+(1011,1011,'HEALTHCARE_CENTRE','WellLife Gampaha Medical Centre 3','84, Healthcare Avenue, Gampaha','Gampaha',7.09000000,79.98890000,'0122001502','Fictional demonstration healthcare centre for Gampaha District.','VERIFIED'),
+(1012,1012,'DOCTOR','Dr. Arun Thiruchelvam - General & Family Clinic','20, Kalutara Main Road, Kalutara','Kalutara',6.58140000,79.96470000,'0731002000','Demo profile for a fictional doctor serving Kalutara District.','VERIFIED'),
+(1013,1013,'DOCTOR','Dr. Meena Ramanathan - Specialist Consultation','31, Kalutara Main Road, Kalutara','Kalutara',6.58540000,79.96070000,'0741002137','Demo profile for a fictional doctor serving Kalutara District.','VERIFIED'),
+(1014,1014,'DOCTOR','Dr. Rizwan Faleel - Medical Practice','42, Kalutara Main Road, Kalutara','Kalutara',6.58940000,79.95670000,'0751002274','Demo profile for a fictional doctor serving Kalutara District.','VERIFIED'),
+(1015,1015,'HEALTHCARE_CENTRE','Lanka Health Kalutara Medical Centre 1','50, Healthcare Avenue, Kalutara','Kalutara',6.57940000,79.96570000,'0132002000','Fictional demonstration healthcare centre for Kalutara District.','VERIFIED'),
+(1016,1016,'HEALTHCARE_CENTRE','WellLife Kalutara Medical Centre 2','67, Healthcare Avenue, Kalutara','Kalutara',6.58540000,79.96070000,'0132002251','Fictional demonstration healthcare centre for Kalutara District.','VERIFIED'),
+(1017,1017,'HEALTHCARE_CENTRE','CarePoint Kalutara Medical Centre 3','84, Healthcare Avenue, Kalutara','Kalutara',6.59140000,79.95570000,'0132002502','Fictional demonstration healthcare centre for Kalutara District.','VERIFIED'),
+(1018,1018,'DOCTOR','Dr. Fathima Rizvi - General & Family Clinic','20, Kandy Main Road, Kandy','Kandy',7.28660000,80.63770000,'0741003000','Demo profile for a fictional doctor serving Kandy District.','VERIFIED'),
+(1019,1019,'DOCTOR','Dr. Janith Pathirana - Specialist Consultation','31, Kandy Main Road, Kandy','Kandy',7.29060000,80.63370000,'0751003137','Demo profile for a fictional doctor serving Kandy District.','VERIFIED'),
+(1020,1020,'DOCTOR','Dr. Ishara Dissanayake - Medical Practice','42, Kandy Main Road, Kandy','Kandy',7.29460000,80.62970000,'0761003274','Demo profile for a fictional doctor serving Kandy District.','VERIFIED'),
+(1021,1021,'HEALTHCARE_CENTRE','WellLife Kandy Medical Centre 1','50, Healthcare Avenue, Kandy','Kandy',7.28460000,80.63870000,'0142003000','Fictional demonstration healthcare centre for Kandy District.','VERIFIED'),
+(1022,1022,'HEALTHCARE_CENTRE','CarePoint Kandy Medical Centre 2','67, Healthcare Avenue, Kandy','Kandy',7.29060000,80.63370000,'0142003251','Fictional demonstration healthcare centre for Kandy District.','VERIFIED'),
+(1023,1023,'HEALTHCARE_CENTRE','Serene Health Kandy Medical Centre 3','84, Healthcare Avenue, Kandy','Kandy',7.29660000,80.62870000,'0142003502','Fictional demonstration healthcare centre for Kandy District.','VERIFIED'),
+(1024,1024,'DOCTOR','Dr. Niroshan Herath - General & Family Clinic','20, Matale Main Road, Matale','Matale',7.46350000,80.62740000,'0751004000','Demo profile for a fictional doctor serving Matale District.','VERIFIED'),
+(1025,1025,'DOCTOR','Dr. Pavithra Karunaratne - Specialist Consultation','31, Matale Main Road, Matale','Matale',7.46750000,80.62340000,'0761004137','Demo profile for a fictional doctor serving Matale District.','VERIFIED'),
+(1026,1026,'DOCTOR','Dr. Suren Fernando - Medical Practice','42, Matale Main Road, Matale','Matale',7.47150000,80.61940000,'0771004274','Demo profile for a fictional doctor serving Matale District.','VERIFIED'),
+(1027,1027,'HEALTHCARE_CENTRE','CarePoint Matale Medical Centre 1','50, Healthcare Avenue, Matale','Matale',7.46150000,80.62840000,'0152004000','Fictional demonstration healthcare centre for Matale District.','VERIFIED'),
+(1028,1028,'HEALTHCARE_CENTRE','Serene Health Matale Medical Centre 2','67, Healthcare Avenue, Matale','Matale',7.46750000,80.62340000,'0152004251','Fictional demonstration healthcare centre for Matale District.','VERIFIED'),
+(1029,1029,'HEALTHCARE_CENTRE','FamilyCare Matale Medical Centre 3','84, Healthcare Avenue, Matale','Matale',7.47350000,80.61840000,'0152004502','Fictional demonstration healthcare centre for Matale District.','VERIFIED'),
+(1030,1030,'DOCTOR','Dr. Keshani Perera - General & Family Clinic','20, Nuwara Eliya Main Road, Nuwara Eliya','Nuwara Eliya',6.94570000,80.79310000,'0761005000','Demo profile for a fictional doctor serving Nuwara Eliya District.','VERIFIED'),
+(1031,1031,'DOCTOR','Dr. Imran Jayawardena - Specialist Consultation','31, Nuwara Eliya Main Road, Nuwara Eliya','Nuwara Eliya',6.94970000,80.78910000,'0771005137','Demo profile for a fictional doctor serving Nuwara Eliya District.','VERIFIED'),
+(1032,1032,'DOCTOR','Dr. Ayesha Samarasinghe - Medical Practice','42, Nuwara Eliya Main Road, Nuwara Eliya','Nuwara Eliya',6.95370000,80.78510000,'0781005274','Demo profile for a fictional doctor serving Nuwara Eliya District.','VERIFIED'),
+(1033,1033,'HEALTHCARE_CENTRE','Serene Health Nuwara Eliya Medical Centre 1','50, Healthcare Avenue, Nuwara Eliya','Nuwara Eliya',6.94370000,80.79410000,'0162005000','Fictional demonstration healthcare centre for Nuwara Eliya District.','VERIFIED'),
+(1034,1034,'HEALTHCARE_CENTRE','FamilyCare Nuwara Eliya Medical Centre 2','67, Healthcare Avenue, Nuwara Eliya','Nuwara Eliya',6.94970000,80.78910000,'0162005251','Fictional demonstration healthcare centre for Nuwara Eliya District.','VERIFIED'),
+(1035,1035,'HEALTHCARE_CENTRE','Ceylon Medical Nuwara Eliya Medical Centre 3','84, Healthcare Avenue, Nuwara Eliya','Nuwara Eliya',6.95570000,80.78410000,'0162005502','Fictional demonstration healthcare centre for Nuwara Eliya District.','VERIFIED'),
+(1036,1036,'DOCTOR','Dr. Thivyan Bandara - General & Family Clinic','20, Galle Main Road, Galle','Galle',6.04950000,80.22500000,'0771006000','Demo profile for a fictional doctor serving Galle District.','VERIFIED'),
+(1037,1037,'DOCTOR','Dr. Harini Senanayake - Specialist Consultation','31, Galle Main Road, Galle','Galle',6.05350000,80.22100000,'0781006137','Demo profile for a fictional doctor serving Galle District.','VERIFIED'),
+(1038,1038,'DOCTOR','Dr. Malith Sivakumar - Medical Practice','42, Galle Main Road, Galle','Galle',6.05750000,80.21700000,'0711006274','Demo profile for a fictional doctor serving Galle District.','VERIFIED'),
+(1039,1039,'HEALTHCARE_CENTRE','FamilyCare Galle Medical Centre 1','50, Healthcare Avenue, Galle','Galle',6.04750000,80.22600000,'0172006000','Fictional demonstration healthcare centre for Galle District.','VERIFIED'),
+(1040,1040,'HEALTHCARE_CENTRE','Ceylon Medical Galle Medical Centre 2','67, Healthcare Avenue, Galle','Galle',6.05350000,80.22100000,'0172006251','Fictional demonstration healthcare centre for Galle District.','VERIFIED'),
+(1041,1041,'HEALTHCARE_CENTRE','HealthyLife Galle Medical Centre 3','84, Healthcare Avenue, Galle','Galle',6.05950000,80.21600000,'0172006502','Fictional demonstration healthcare centre for Galle District.','VERIFIED'),
+(1042,1042,'DOCTOR','Dr. Dinithi Thiruchelvam - General & Family Clinic','20, Matara Main Road, Matara','Matara',5.95090000,80.55900000,'0781007000','Demo profile for a fictional doctor serving Matara District.','VERIFIED'),
+(1043,1043,'DOCTOR','Dr. Roshan Ramanathan - Specialist Consultation','31, Matara Main Road, Matara','Matara',5.95490000,80.55500000,'0711007137','Demo profile for a fictional doctor serving Matara District.','VERIFIED'),
+(1044,1044,'DOCTOR','Dr. Shalini Faleel - Medical Practice','42, Matara Main Road, Matara','Matara',5.95890000,80.55100000,'0721007274','Demo profile for a fictional doctor serving Matara District.','VERIFIED'),
+(1045,1045,'HEALTHCARE_CENTRE','Ceylon Medical Matara Medical Centre 1','50, Healthcare Avenue, Matara','Matara',5.94890000,80.56000000,'0182007000','Fictional demonstration healthcare centre for Matara District.','VERIFIED'),
+(1046,1046,'HEALTHCARE_CENTRE','HealthyLife Matara Medical Centre 2','67, Healthcare Avenue, Matara','Matara',5.95490000,80.55500000,'0182007251','Fictional demonstration healthcare centre for Matara District.','VERIFIED'),
+(1047,1047,'HEALTHCARE_CENTRE','Unity Care Matara Medical Centre 3','84, Healthcare Avenue, Matara','Matara',5.96090000,80.55000000,'0182007502','Fictional demonstration healthcare centre for Matara District.','VERIFIED'),
+(1048,1048,'DOCTOR','Dr. Naveen Rizvi - General & Family Clinic','20, Hambantota Main Road, Hambantota','Hambantota',6.12010000,81.12250000,'0711008000','Demo profile for a fictional doctor serving Hambantota District.','VERIFIED'),
+(1049,1049,'DOCTOR','Dr. Gayathri Pathirana - Specialist Consultation','31, Hambantota Main Road, Hambantota','Hambantota',6.12410000,81.11850000,'0721008137','Demo profile for a fictional doctor serving Hambantota District.','VERIFIED'),
+(1050,1050,'DOCTOR','Dr. Akeel Dissanayake - Medical Practice','42, Hambantota Main Road, Hambantota','Hambantota',6.12810000,81.11450000,'0731008274','Demo profile for a fictional doctor serving Hambantota District.','VERIFIED'),
+(1051,1051,'HEALTHCARE_CENTRE','HealthyLife Hambantota Medical Centre 1','50, Healthcare Avenue, Hambantota','Hambantota',6.11810000,81.12350000,'0112008000','Fictional demonstration healthcare centre for Hambantota District.','VERIFIED'),
+(1052,1052,'HEALTHCARE_CENTRE','Unity Care Hambantota Medical Centre 2','67, Healthcare Avenue, Hambantota','Hambantota',6.12410000,81.11850000,'0112008251','Fictional demonstration healthcare centre for Hambantota District.','VERIFIED'),
+(1053,1053,'HEALTHCARE_CENTRE','MediCare Hambantota Medical Centre 3','84, Healthcare Avenue, Hambantota','Hambantota',6.13010000,81.11350000,'0112008502','Fictional demonstration healthcare centre for Hambantota District.','VERIFIED'),
+(1054,1054,'DOCTOR','Dr. Nafla Herath - General & Family Clinic','20, Jaffna Main Road, Jaffna','Jaffna',9.65750000,80.02950000,'0721009000','Demo profile for a fictional doctor serving Jaffna District.','VERIFIED'),
+(1055,1055,'DOCTOR','Dr. Praveen Karunaratne - Specialist Consultation','31, Jaffna Main Road, Jaffna','Jaffna',9.66150000,80.02550000,'0731009137','Demo profile for a fictional doctor serving Jaffna District.','VERIFIED'),
+(1056,1056,'DOCTOR','Dr. Yasara Fernando - Medical Practice','42, Jaffna Main Road, Jaffna','Jaffna',9.66550000,80.02150000,'0741009274','Demo profile for a fictional doctor serving Jaffna District.','VERIFIED'),
+(1057,1057,'HEALTHCARE_CENTRE','Unity Care Jaffna Medical Centre 1','50, Healthcare Avenue, Jaffna','Jaffna',9.65550000,80.03050000,'0122009000','Fictional demonstration healthcare centre for Jaffna District.','VERIFIED'),
+(1058,1058,'HEALTHCARE_CENTRE','MediCare Jaffna Medical Centre 2','67, Healthcare Avenue, Jaffna','Jaffna',9.66150000,80.02550000,'0122009251','Fictional demonstration healthcare centre for Jaffna District.','VERIFIED'),
+(1059,1059,'HEALTHCARE_CENTRE','Suwasetha Jaffna Medical Centre 3','84, Healthcare Avenue, Jaffna','Jaffna',9.66750000,80.02050000,'0122009502','Fictional demonstration healthcare centre for Jaffna District.','VERIFIED'),
+(1060,1060,'DOCTOR','Dr. Aarav Perera - General & Family Clinic','20, Kilinochchi Main Road, Kilinochchi','Kilinochchi',9.37630000,80.38100000,'0731010000','Demo profile for a fictional doctor serving Kilinochchi District.','VERIFIED'),
+(1061,1061,'DOCTOR','Dr. Nethmi Jayawardena - Specialist Consultation','31, Kilinochchi Main Road, Kilinochchi','Kilinochchi',9.38030000,80.37700000,'0741010137','Demo profile for a fictional doctor serving Kilinochchi District.','VERIFIED'),
+(1062,1062,'DOCTOR','Dr. Kavindu Samarasinghe - Medical Practice','42, Kilinochchi Main Road, Kilinochchi','Kilinochchi',9.38430000,80.37300000,'0751010274','Demo profile for a fictional doctor serving Kilinochchi District.','VERIFIED'),
+(1063,1063,'HEALTHCARE_CENTRE','MediCare Kilinochchi Medical Centre 1','50, Healthcare Avenue, Kilinochchi','Kilinochchi',9.37430000,80.38200000,'0132010000','Fictional demonstration healthcare centre for Kilinochchi District.','VERIFIED'),
+(1064,1064,'HEALTHCARE_CENTRE','Suwasetha Kilinochchi Medical Centre 2','67, Healthcare Avenue, Kilinochchi','Kilinochchi',9.38030000,80.37700000,'0132010251','Fictional demonstration healthcare centre for Kilinochchi District.','VERIFIED'),
+(1065,1065,'HEALTHCARE_CENTRE','Lanka Health Kilinochchi Medical Centre 3','84, Healthcare Avenue, Kilinochchi','Kilinochchi',9.38630000,80.37200000,'0132010502','Fictional demonstration healthcare centre for Kilinochchi District.','VERIFIED'),
+(1066,1066,'DOCTOR','Dr. Tharushi Bandara - General & Family Clinic','20, Mannar Main Road, Mannar','Mannar',8.97700000,79.90840000,'0741011000','Demo profile for a fictional doctor serving Mannar District.','VERIFIED'),
+(1067,1067,'DOCTOR','Dr. Dilan Senanayake - Specialist Consultation','31, Mannar Main Road, Mannar','Mannar',8.98100000,79.90440000,'0751011137','Demo profile for a fictional doctor serving Mannar District.','VERIFIED'),
+(1068,1068,'DOCTOR','Dr. Sachini Sivakumar - Medical Practice','42, Mannar Main Road, Mannar','Mannar',8.98500000,79.90040000,'0761011274','Demo profile for a fictional doctor serving Mannar District.','VERIFIED'),
+(1069,1069,'HEALTHCARE_CENTRE','Suwasetha Mannar Medical Centre 1','50, Healthcare Avenue, Mannar','Mannar',8.97500000,79.90940000,'0142011000','Fictional demonstration healthcare centre for Mannar District.','VERIFIED'),
+(1070,1070,'HEALTHCARE_CENTRE','Lanka Health Mannar Medical Centre 2','67, Healthcare Avenue, Mannar','Mannar',8.98100000,79.90440000,'0142011251','Fictional demonstration healthcare centre for Mannar District.','VERIFIED'),
+(1071,1071,'HEALTHCARE_CENTRE','WellLife Mannar Medical Centre 3','84, Healthcare Avenue, Mannar','Mannar',8.98700000,79.89940000,'0142011502','Fictional demonstration healthcare centre for Mannar District.','VERIFIED'),
+(1072,1072,'DOCTOR','Dr. Arun Thiruchelvam - General & Family Clinic','20, Vavuniya Main Road, Vavuniya','Vavuniya',8.74740000,80.50110000,'0751012000','Demo profile for a fictional doctor serving Vavuniya District.','VERIFIED'),
+(1073,1073,'DOCTOR','Dr. Meena Ramanathan - Specialist Consultation','31, Vavuniya Main Road, Vavuniya','Vavuniya',8.75140000,80.49710000,'0761012137','Demo profile for a fictional doctor serving Vavuniya District.','VERIFIED'),
+(1074,1074,'DOCTOR','Dr. Rizwan Faleel - Medical Practice','42, Vavuniya Main Road, Vavuniya','Vavuniya',8.75540000,80.49310000,'0771012274','Demo profile for a fictional doctor serving Vavuniya District.','VERIFIED'),
+(1075,1075,'HEALTHCARE_CENTRE','Lanka Health Vavuniya Medical Centre 1','50, Healthcare Avenue, Vavuniya','Vavuniya',8.74540000,80.50210000,'0152012000','Fictional demonstration healthcare centre for Vavuniya District.','VERIFIED'),
+(1076,1076,'HEALTHCARE_CENTRE','WellLife Vavuniya Medical Centre 2','67, Healthcare Avenue, Vavuniya','Vavuniya',8.75140000,80.49710000,'0152012251','Fictional demonstration healthcare centre for Vavuniya District.','VERIFIED'),
+(1077,1077,'HEALTHCARE_CENTRE','CarePoint Vavuniya Medical Centre 3','84, Healthcare Avenue, Vavuniya','Vavuniya',8.75740000,80.49210000,'0152012502','Fictional demonstration healthcare centre for Vavuniya District.','VERIFIED'),
+(1078,1078,'DOCTOR','Dr. Fathima Rizvi - General & Family Clinic','20, Mullaitivu Main Road, Mullaitivu','Mullaitivu',9.26310000,80.81820000,'0761013000','Demo profile for a fictional doctor serving Mullaitivu District.','VERIFIED'),
+(1079,1079,'DOCTOR','Dr. Janith Pathirana - Specialist Consultation','31, Mullaitivu Main Road, Mullaitivu','Mullaitivu',9.26710000,80.81420000,'0771013137','Demo profile for a fictional doctor serving Mullaitivu District.','VERIFIED'),
+(1080,1080,'DOCTOR','Dr. Ishara Dissanayake - Medical Practice','42, Mullaitivu Main Road, Mullaitivu','Mullaitivu',9.27110000,80.81020000,'0781013274','Demo profile for a fictional doctor serving Mullaitivu District.','VERIFIED'),
+(1081,1081,'HEALTHCARE_CENTRE','WellLife Mullaitivu Medical Centre 1','50, Healthcare Avenue, Mullaitivu','Mullaitivu',9.26110000,80.81920000,'0162013000','Fictional demonstration healthcare centre for Mullaitivu District.','VERIFIED'),
+(1082,1082,'HEALTHCARE_CENTRE','CarePoint Mullaitivu Medical Centre 2','67, Healthcare Avenue, Mullaitivu','Mullaitivu',9.26710000,80.81420000,'0162013251','Fictional demonstration healthcare centre for Mullaitivu District.','VERIFIED'),
+(1083,1083,'HEALTHCARE_CENTRE','Serene Health Mullaitivu Medical Centre 3','84, Healthcare Avenue, Mullaitivu','Mullaitivu',9.27310000,80.80920000,'0162013502','Fictional demonstration healthcare centre for Mullaitivu District.','VERIFIED'),
+(1084,1084,'DOCTOR','Dr. Niroshan Herath - General & Family Clinic','20, Batticaloa Main Road, Batticaloa','Batticaloa',7.72700000,81.67870000,'0771014000','Demo profile for a fictional doctor serving Batticaloa District.','VERIFIED'),
+(1085,1085,'DOCTOR','Dr. Pavithra Karunaratne - Specialist Consultation','31, Batticaloa Main Road, Batticaloa','Batticaloa',7.73100000,81.67470000,'0781014137','Demo profile for a fictional doctor serving Batticaloa District.','VERIFIED'),
+(1086,1086,'DOCTOR','Dr. Suren Fernando - Medical Practice','42, Batticaloa Main Road, Batticaloa','Batticaloa',7.73500000,81.67070000,'0711014274','Demo profile for a fictional doctor serving Batticaloa District.','VERIFIED'),
+(1087,1087,'HEALTHCARE_CENTRE','CarePoint Batticaloa Medical Centre 1','50, Healthcare Avenue, Batticaloa','Batticaloa',7.72500000,81.67970000,'0172014000','Fictional demonstration healthcare centre for Batticaloa District.','VERIFIED'),
+(1088,1088,'HEALTHCARE_CENTRE','Serene Health Batticaloa Medical Centre 2','67, Healthcare Avenue, Batticaloa','Batticaloa',7.73100000,81.67470000,'0172014251','Fictional demonstration healthcare centre for Batticaloa District.','VERIFIED'),
+(1089,1089,'HEALTHCARE_CENTRE','FamilyCare Batticaloa Medical Centre 3','84, Healthcare Avenue, Batticaloa','Batticaloa',7.73700000,81.66970000,'0172014502','Fictional demonstration healthcare centre for Batticaloa District.','VERIFIED'),
+(1090,1090,'DOCTOR','Dr. Keshani Perera - General & Family Clinic','20, Ampara Main Road, Ampara','Ampara',7.28770000,81.67640000,'0781015000','Demo profile for a fictional doctor serving Ampara District.','VERIFIED'),
+(1091,1091,'DOCTOR','Dr. Imran Jayawardena - Specialist Consultation','31, Ampara Main Road, Ampara','Ampara',7.29170000,81.67240000,'0711015137','Demo profile for a fictional doctor serving Ampara District.','VERIFIED'),
+(1092,1092,'DOCTOR','Dr. Ayesha Samarasinghe - Medical Practice','42, Ampara Main Road, Ampara','Ampara',7.29570000,81.66840000,'0721015274','Demo profile for a fictional doctor serving Ampara District.','VERIFIED'),
+(1093,1093,'HEALTHCARE_CENTRE','Serene Health Ampara Medical Centre 1','50, Healthcare Avenue, Ampara','Ampara',7.28570000,81.67740000,'0182015000','Fictional demonstration healthcare centre for Ampara District.','VERIFIED'),
+(1094,1094,'HEALTHCARE_CENTRE','FamilyCare Ampara Medical Centre 2','67, Healthcare Avenue, Ampara','Ampara',7.29170000,81.67240000,'0182015251','Fictional demonstration healthcare centre for Ampara District.','VERIFIED'),
+(1095,1095,'HEALTHCARE_CENTRE','Ceylon Medical Ampara Medical Centre 3','84, Healthcare Avenue, Ampara','Ampara',7.29770000,81.66740000,'0182015502','Fictional demonstration healthcare centre for Ampara District.','VERIFIED'),
+(1096,1096,'DOCTOR','Dr. Thivyan Bandara - General & Family Clinic','20, Trincomalee Main Road, Trincomalee','Trincomalee',8.58340000,81.21920000,'0711016000','Demo profile for a fictional doctor serving Trincomalee District.','VERIFIED'),
+(1097,1097,'DOCTOR','Dr. Harini Senanayake - Specialist Consultation','31, Trincomalee Main Road, Trincomalee','Trincomalee',8.58740000,81.21520000,'0721016137','Demo profile for a fictional doctor serving Trincomalee District.','VERIFIED'),
+(1098,1098,'DOCTOR','Dr. Malith Sivakumar - Medical Practice','42, Trincomalee Main Road, Trincomalee','Trincomalee',8.59140000,81.21120000,'0731016274','Demo profile for a fictional doctor serving Trincomalee District.','VERIFIED'),
+(1099,1099,'HEALTHCARE_CENTRE','FamilyCare Trincomalee Medical Centre 1','50, Healthcare Avenue, Trincomalee','Trincomalee',8.58140000,81.22020000,'0112016000','Fictional demonstration healthcare centre for Trincomalee District.','VERIFIED'),
+(1100,1100,'HEALTHCARE_CENTRE','Ceylon Medical Trincomalee Medical Centre 2','67, Healthcare Avenue, Trincomalee','Trincomalee',8.58740000,81.21520000,'0112016251','Fictional demonstration healthcare centre for Trincomalee District.','VERIFIED'),
+(1101,1101,'HEALTHCARE_CENTRE','HealthyLife Trincomalee Medical Centre 3','84, Healthcare Avenue, Trincomalee','Trincomalee',8.59340000,81.21020000,'0112016502','Fictional demonstration healthcare centre for Trincomalee District.','VERIFIED'),
+(1102,1102,'DOCTOR','Dr. Dinithi Thiruchelvam - General & Family Clinic','20, Kurunegala Main Road, Kurunegala','Kurunegala',7.47780000,80.36490000,'0721017000','Demo profile for a fictional doctor serving Kurunegala District.','VERIFIED'),
+(1103,1103,'DOCTOR','Dr. Roshan Ramanathan - Specialist Consultation','31, Kurunegala Main Road, Kurunegala','Kurunegala',7.48180000,80.36090000,'0731017137','Demo profile for a fictional doctor serving Kurunegala District.','VERIFIED'),
+(1104,1104,'DOCTOR','Dr. Shalini Faleel - Medical Practice','42, Kurunegala Main Road, Kurunegala','Kurunegala',7.48580000,80.35690000,'0741017274','Demo profile for a fictional doctor serving Kurunegala District.','VERIFIED'),
+(1105,1105,'HEALTHCARE_CENTRE','Ceylon Medical Kurunegala Medical Centre 1','50, Healthcare Avenue, Kurunegala','Kurunegala',7.47580000,80.36590000,'0122017000','Fictional demonstration healthcare centre for Kurunegala District.','VERIFIED'),
+(1106,1106,'HEALTHCARE_CENTRE','HealthyLife Kurunegala Medical Centre 2','67, Healthcare Avenue, Kurunegala','Kurunegala',7.48180000,80.36090000,'0122017251','Fictional demonstration healthcare centre for Kurunegala District.','VERIFIED'),
+(1107,1107,'HEALTHCARE_CENTRE','Unity Care Kurunegala Medical Centre 3','84, Healthcare Avenue, Kurunegala','Kurunegala',7.48780000,80.35590000,'0122017502','Fictional demonstration healthcare centre for Kurunegala District.','VERIFIED'),
+(1108,1108,'DOCTOR','Dr. Naveen Rizvi - General & Family Clinic','20, Puttalam Main Road, Puttalam','Puttalam',8.03220000,79.83230000,'0731018000','Demo profile for a fictional doctor serving Puttalam District.','VERIFIED'),
+(1109,1109,'DOCTOR','Dr. Gayathri Pathirana - Specialist Consultation','31, Puttalam Main Road, Puttalam','Puttalam',8.03620000,79.82830000,'0741018137','Demo profile for a fictional doctor serving Puttalam District.','VERIFIED'),
+(1110,1110,'DOCTOR','Dr. Akeel Dissanayake - Medical Practice','42, Puttalam Main Road, Puttalam','Puttalam',8.04020000,79.82430000,'0751018274','Demo profile for a fictional doctor serving Puttalam District.','VERIFIED'),
+(1111,1111,'HEALTHCARE_CENTRE','HealthyLife Puttalam Medical Centre 1','50, Healthcare Avenue, Puttalam','Puttalam',8.03020000,79.83330000,'0132018000','Fictional demonstration healthcare centre for Puttalam District.','VERIFIED'),
+(1112,1112,'HEALTHCARE_CENTRE','Unity Care Puttalam Medical Centre 2','67, Healthcare Avenue, Puttalam','Puttalam',8.03620000,79.82830000,'0132018251','Fictional demonstration healthcare centre for Puttalam District.','VERIFIED'),
+(1113,1113,'HEALTHCARE_CENTRE','MediCare Puttalam Medical Centre 3','84, Healthcare Avenue, Puttalam','Puttalam',8.04220000,79.82330000,'0132018502','Fictional demonstration healthcare centre for Puttalam District.','VERIFIED'),
+(1114,1114,'DOCTOR','Dr. Nafla Herath - General & Family Clinic','20, Anuradhapura Main Road, Anuradhapura','Anuradhapura',8.30740000,80.40770000,'0741019000','Demo profile for a fictional doctor serving Anuradhapura District.','VERIFIED'),
+(1115,1115,'DOCTOR','Dr. Praveen Karunaratne - Specialist Consultation','31, Anuradhapura Main Road, Anuradhapura','Anuradhapura',8.31140000,80.40370000,'0751019137','Demo profile for a fictional doctor serving Anuradhapura District.','VERIFIED'),
+(1116,1116,'DOCTOR','Dr. Yasara Fernando - Medical Practice','42, Anuradhapura Main Road, Anuradhapura','Anuradhapura',8.31540000,80.39970000,'0761019274','Demo profile for a fictional doctor serving Anuradhapura District.','VERIFIED'),
+(1117,1117,'HEALTHCARE_CENTRE','Unity Care Anuradhapura Medical Centre 1','50, Healthcare Avenue, Anuradhapura','Anuradhapura',8.30540000,80.40870000,'0142019000','Fictional demonstration healthcare centre for Anuradhapura District.','VERIFIED'),
+(1118,1118,'HEALTHCARE_CENTRE','MediCare Anuradhapura Medical Centre 2','67, Healthcare Avenue, Anuradhapura','Anuradhapura',8.31140000,80.40370000,'0142019251','Fictional demonstration healthcare centre for Anuradhapura District.','VERIFIED'),
+(1119,1119,'HEALTHCARE_CENTRE','Suwasetha Anuradhapura Medical Centre 3','84, Healthcare Avenue, Anuradhapura','Anuradhapura',8.31740000,80.39870000,'0142019502','Fictional demonstration healthcare centre for Anuradhapura District.','VERIFIED'),
+(1120,1120,'DOCTOR','Dr. Aarav Perera - General & Family Clinic','20, Polonnaruwa Main Road, Polonnaruwa','Polonnaruwa',7.93630000,81.02280000,'0751020000','Demo profile for a fictional doctor serving Polonnaruwa District.','VERIFIED'),
+(1121,1121,'DOCTOR','Dr. Nethmi Jayawardena - Specialist Consultation','31, Polonnaruwa Main Road, Polonnaruwa','Polonnaruwa',7.94030000,81.01880000,'0761020137','Demo profile for a fictional doctor serving Polonnaruwa District.','VERIFIED'),
+(1122,1122,'DOCTOR','Dr. Kavindu Samarasinghe - Medical Practice','42, Polonnaruwa Main Road, Polonnaruwa','Polonnaruwa',7.94430000,81.01480000,'0771020274','Demo profile for a fictional doctor serving Polonnaruwa District.','VERIFIED'),
+(1123,1123,'HEALTHCARE_CENTRE','MediCare Polonnaruwa Medical Centre 1','50, Healthcare Avenue, Polonnaruwa','Polonnaruwa',7.93430000,81.02380000,'0152020000','Fictional demonstration healthcare centre for Polonnaruwa District.','VERIFIED'),
+(1124,1124,'HEALTHCARE_CENTRE','Suwasetha Polonnaruwa Medical Centre 2','67, Healthcare Avenue, Polonnaruwa','Polonnaruwa',7.94030000,81.01880000,'0152020251','Fictional demonstration healthcare centre for Polonnaruwa District.','VERIFIED'),
+(1125,1125,'HEALTHCARE_CENTRE','Lanka Health Polonnaruwa Medical Centre 3','84, Healthcare Avenue, Polonnaruwa','Polonnaruwa',7.94630000,81.01380000,'0152020502','Fictional demonstration healthcare centre for Polonnaruwa District.','VERIFIED'),
+(1126,1126,'DOCTOR','Dr. Tharushi Bandara - General & Family Clinic','20, Badulla Main Road, Badulla','Badulla',6.98940000,81.05900000,'0761021000','Demo profile for a fictional doctor serving Badulla District.','VERIFIED'),
+(1127,1127,'DOCTOR','Dr. Dilan Senanayake - Specialist Consultation','31, Badulla Main Road, Badulla','Badulla',6.99340000,81.05500000,'0771021137','Demo profile for a fictional doctor serving Badulla District.','VERIFIED'),
+(1128,1128,'DOCTOR','Dr. Sachini Sivakumar - Medical Practice','42, Badulla Main Road, Badulla','Badulla',6.99740000,81.05100000,'0781021274','Demo profile for a fictional doctor serving Badulla District.','VERIFIED'),
+(1129,1129,'HEALTHCARE_CENTRE','Suwasetha Badulla Medical Centre 1','50, Healthcare Avenue, Badulla','Badulla',6.98740000,81.06000000,'0162021000','Fictional demonstration healthcare centre for Badulla District.','VERIFIED'),
+(1130,1130,'HEALTHCARE_CENTRE','Lanka Health Badulla Medical Centre 2','67, Healthcare Avenue, Badulla','Badulla',6.99340000,81.05500000,'0162021251','Fictional demonstration healthcare centre for Badulla District.','VERIFIED'),
+(1131,1131,'HEALTHCARE_CENTRE','WellLife Badulla Medical Centre 3','84, Healthcare Avenue, Badulla','Badulla',6.99940000,81.05000000,'0162021502','Fictional demonstration healthcare centre for Badulla District.','VERIFIED'),
+(1132,1132,'DOCTOR','Dr. Arun Thiruchelvam - General & Family Clinic','20, Monaragala Main Road, Monaragala','Monaragala',6.86880000,81.35470000,'0771022000','Demo profile for a fictional doctor serving Monaragala District.','VERIFIED'),
+(1133,1133,'DOCTOR','Dr. Meena Ramanathan - Specialist Consultation','31, Monaragala Main Road, Monaragala','Monaragala',6.87280000,81.35070000,'0781022137','Demo profile for a fictional doctor serving Monaragala District.','VERIFIED'),
+(1134,1134,'DOCTOR','Dr. Rizwan Faleel - Medical Practice','42, Monaragala Main Road, Monaragala','Monaragala',6.87680000,81.34670000,'0711022274','Demo profile for a fictional doctor serving Monaragala District.','VERIFIED'),
+(1135,1135,'HEALTHCARE_CENTRE','Lanka Health Monaragala Medical Centre 1','50, Healthcare Avenue, Monaragala','Monaragala',6.86680000,81.35570000,'0172022000','Fictional demonstration healthcare centre for Monaragala District.','VERIFIED'),
+(1136,1136,'HEALTHCARE_CENTRE','WellLife Monaragala Medical Centre 2','67, Healthcare Avenue, Monaragala','Monaragala',6.87280000,81.35070000,'0172022251','Fictional demonstration healthcare centre for Monaragala District.','VERIFIED'),
+(1137,1137,'HEALTHCARE_CENTRE','CarePoint Monaragala Medical Centre 3','84, Healthcare Avenue, Monaragala','Monaragala',6.87880000,81.34570000,'0172022502','Fictional demonstration healthcare centre for Monaragala District.','VERIFIED'),
+(1138,1138,'DOCTOR','Dr. Fathima Rizvi - General & Family Clinic','20, Ratnapura Main Road, Ratnapura','Ratnapura',6.67880000,80.40400000,'0781023000','Demo profile for a fictional doctor serving Ratnapura District.','VERIFIED'),
+(1139,1139,'DOCTOR','Dr. Janith Pathirana - Specialist Consultation','31, Ratnapura Main Road, Ratnapura','Ratnapura',6.68280000,80.40000000,'0711023137','Demo profile for a fictional doctor serving Ratnapura District.','VERIFIED'),
+(1140,1140,'DOCTOR','Dr. Ishara Dissanayake - Medical Practice','42, Ratnapura Main Road, Ratnapura','Ratnapura',6.68680000,80.39600000,'0721023274','Demo profile for a fictional doctor serving Ratnapura District.','VERIFIED'),
+(1141,1141,'HEALTHCARE_CENTRE','WellLife Ratnapura Medical Centre 1','50, Healthcare Avenue, Ratnapura','Ratnapura',6.67680000,80.40500000,'0182023000','Fictional demonstration healthcare centre for Ratnapura District.','VERIFIED'),
+(1142,1142,'HEALTHCARE_CENTRE','CarePoint Ratnapura Medical Centre 2','67, Healthcare Avenue, Ratnapura','Ratnapura',6.68280000,80.40000000,'0182023251','Fictional demonstration healthcare centre for Ratnapura District.','VERIFIED'),
+(1143,1143,'HEALTHCARE_CENTRE','Serene Health Ratnapura Medical Centre 3','84, Healthcare Avenue, Ratnapura','Ratnapura',6.68880000,80.39500000,'0182023502','Fictional demonstration healthcare centre for Ratnapura District.','VERIFIED'),
+(1144,1144,'DOCTOR','Dr. Niroshan Herath - General & Family Clinic','20, Kegalle Main Road, Kegalle','Kegalle',7.24730000,80.35040000,'0711024000','Demo profile for a fictional doctor serving Kegalle District.','VERIFIED'),
+(1145,1145,'DOCTOR','Dr. Pavithra Karunaratne - Specialist Consultation','31, Kegalle Main Road, Kegalle','Kegalle',7.25130000,80.34640000,'0721024137','Demo profile for a fictional doctor serving Kegalle District.','VERIFIED'),
+(1146,1146,'DOCTOR','Dr. Suren Fernando - Medical Practice','42, Kegalle Main Road, Kegalle','Kegalle',7.25530000,80.34240000,'0731024274','Demo profile for a fictional doctor serving Kegalle District.','VERIFIED'),
+(1147,1147,'HEALTHCARE_CENTRE','CarePoint Kegalle Medical Centre 1','50, Healthcare Avenue, Kegalle','Kegalle',7.24530000,80.35140000,'0112024000','Fictional demonstration healthcare centre for Kegalle District.','VERIFIED'),
+(1148,1148,'HEALTHCARE_CENTRE','Serene Health Kegalle Medical Centre 2','67, Healthcare Avenue, Kegalle','Kegalle',7.25130000,80.34640000,'0112024251','Fictional demonstration healthcare centre for Kegalle District.','VERIFIED'),
+(1149,1149,'HEALTHCARE_CENTRE','FamilyCare Kegalle Medical Centre 3','84, Healthcare Avenue, Kegalle','Kegalle',7.25730000,80.34140000,'0112024502','Fictional demonstration healthcare centre for Kegalle District.','VERIFIED');
+INSERT INTO `DOCTOR` (`Doctor_ID`,`Provider_ID`,`Medical_License_No`,`Professional_Bio`,`Experience_Years`,`Consultation_Duration`,`Verification_Status`) VALUES
+(1000,1000,'DEMO-SLMC-0101','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',5,20,'VERIFIED'),
+(1001,1001,'DEMO-SLMC-0102','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',7,30,'VERIFIED'),
+(1002,1002,'DEMO-SLMC-0103','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',9,20,'VERIFIED'),
+(1003,1006,'DEMO-SLMC-0201','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',6,20,'VERIFIED'),
+(1004,1007,'DEMO-SLMC-0202','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',8,30,'VERIFIED'),
+(1005,1008,'DEMO-SLMC-0203','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',10,20,'VERIFIED'),
+(1006,1012,'DEMO-SLMC-0301','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',7,20,'VERIFIED'),
+(1007,1013,'DEMO-SLMC-0302','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',9,30,'VERIFIED'),
+(1008,1014,'DEMO-SLMC-0303','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',11,20,'VERIFIED'),
+(1009,1018,'DEMO-SLMC-0401','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',8,20,'VERIFIED'),
+(1010,1019,'DEMO-SLMC-0402','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',10,30,'VERIFIED'),
+(1011,1020,'DEMO-SLMC-0403','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',12,20,'VERIFIED'),
+(1012,1024,'DEMO-SLMC-0501','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',9,20,'VERIFIED'),
+(1013,1025,'DEMO-SLMC-0502','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',11,30,'VERIFIED'),
+(1014,1026,'DEMO-SLMC-0503','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',13,20,'VERIFIED'),
+(1015,1030,'DEMO-SLMC-0601','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',10,20,'VERIFIED'),
+(1016,1031,'DEMO-SLMC-0602','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',12,30,'VERIFIED'),
+(1017,1032,'DEMO-SLMC-0603','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',14,20,'VERIFIED'),
+(1018,1036,'DEMO-SLMC-0701','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',11,20,'VERIFIED'),
+(1019,1037,'DEMO-SLMC-0702','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',13,30,'VERIFIED'),
+(1020,1038,'DEMO-SLMC-0703','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',15,20,'VERIFIED'),
+(1021,1042,'DEMO-SLMC-0801','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',12,20,'VERIFIED'),
+(1022,1043,'DEMO-SLMC-0802','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',14,30,'VERIFIED'),
+(1023,1044,'DEMO-SLMC-0803','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',16,20,'VERIFIED'),
+(1024,1048,'DEMO-SLMC-0901','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',13,20,'VERIFIED'),
+(1025,1049,'DEMO-SLMC-0902','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',15,30,'VERIFIED'),
+(1026,1050,'DEMO-SLMC-0903','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',17,20,'VERIFIED'),
+(1027,1054,'DEMO-SLMC-1001','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',14,20,'VERIFIED'),
+(1028,1055,'DEMO-SLMC-1002','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',16,30,'VERIFIED'),
+(1029,1056,'DEMO-SLMC-1003','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',18,20,'VERIFIED'),
+(1030,1060,'DEMO-SLMC-1101','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',15,20,'VERIFIED'),
+(1031,1061,'DEMO-SLMC-1102','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',17,30,'VERIFIED'),
+(1032,1062,'DEMO-SLMC-1103','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',19,20,'VERIFIED'),
+(1033,1066,'DEMO-SLMC-1201','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',16,20,'VERIFIED'),
+(1034,1067,'DEMO-SLMC-1202','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',18,30,'VERIFIED'),
+(1035,1068,'DEMO-SLMC-1203','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',20,20,'VERIFIED'),
+(1036,1072,'DEMO-SLMC-1301','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',17,20,'VERIFIED'),
+(1037,1073,'DEMO-SLMC-1302','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',19,30,'VERIFIED'),
+(1038,1074,'DEMO-SLMC-1303','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',21,20,'VERIFIED'),
+(1039,1078,'DEMO-SLMC-1401','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',18,20,'VERIFIED'),
+(1040,1079,'DEMO-SLMC-1402','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',20,30,'VERIFIED'),
+(1041,1080,'DEMO-SLMC-1403','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',22,20,'VERIFIED'),
+(1042,1084,'DEMO-SLMC-1501','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',19,20,'VERIFIED'),
+(1043,1085,'DEMO-SLMC-1502','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',21,30,'VERIFIED'),
+(1044,1086,'DEMO-SLMC-1503','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',5,20,'VERIFIED'),
+(1045,1090,'DEMO-SLMC-1601','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',20,20,'VERIFIED'),
+(1046,1091,'DEMO-SLMC-1602','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',22,30,'VERIFIED'),
+(1047,1092,'DEMO-SLMC-1603','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',6,20,'VERIFIED'),
+(1048,1096,'DEMO-SLMC-1701','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',21,20,'VERIFIED'),
+(1049,1097,'DEMO-SLMC-1702','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',5,30,'VERIFIED'),
+(1050,1098,'DEMO-SLMC-1703','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',7,20,'VERIFIED'),
+(1051,1102,'DEMO-SLMC-1801','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',22,20,'VERIFIED'),
+(1052,1103,'DEMO-SLMC-1802','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',6,30,'VERIFIED'),
+(1053,1104,'DEMO-SLMC-1803','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',8,20,'VERIFIED'),
+(1054,1108,'DEMO-SLMC-1901','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',5,20,'VERIFIED'),
+(1055,1109,'DEMO-SLMC-1902','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',7,30,'VERIFIED'),
+(1056,1110,'DEMO-SLMC-1903','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',9,20,'VERIFIED'),
+(1057,1114,'DEMO-SLMC-2001','Fictional demonstration clinician profile for MediLink. Specialization seed #4; details are synthetic and not linked to a real practitioner.',6,20,'VERIFIED'),
+(1058,1115,'DEMO-SLMC-2002','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',8,30,'VERIFIED'),
+(1059,1116,'DEMO-SLMC-2003','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',10,20,'VERIFIED'),
+(1060,1120,'DEMO-SLMC-2101','Fictional demonstration clinician profile for MediLink. Specialization seed #5; details are synthetic and not linked to a real practitioner.',7,20,'VERIFIED'),
+(1061,1121,'DEMO-SLMC-2102','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',9,30,'VERIFIED'),
+(1062,1122,'DEMO-SLMC-2103','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',11,20,'VERIFIED'),
+(1063,1126,'DEMO-SLMC-2201','Fictional demonstration clinician profile for MediLink. Specialization seed #6; details are synthetic and not linked to a real practitioner.',8,20,'VERIFIED'),
+(1064,1127,'DEMO-SLMC-2202','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',10,30,'VERIFIED'),
+(1065,1128,'DEMO-SLMC-2203','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',12,20,'VERIFIED'),
+(1066,1132,'DEMO-SLMC-2301','Fictional demonstration clinician profile for MediLink. Specialization seed #7; details are synthetic and not linked to a real practitioner.',9,20,'VERIFIED'),
+(1067,1133,'DEMO-SLMC-2302','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',11,30,'VERIFIED'),
+(1068,1134,'DEMO-SLMC-2303','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',13,20,'VERIFIED'),
+(1069,1138,'DEMO-SLMC-2401','Fictional demonstration clinician profile for MediLink. Specialization seed #8; details are synthetic and not linked to a real practitioner.',10,20,'VERIFIED'),
+(1070,1139,'DEMO-SLMC-2402','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',12,30,'VERIFIED'),
+(1071,1140,'DEMO-SLMC-2403','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',14,20,'VERIFIED'),
+(1072,1144,'DEMO-SLMC-2501','Fictional demonstration clinician profile for MediLink. Specialization seed #1; details are synthetic and not linked to a real practitioner.',11,20,'VERIFIED'),
+(1073,1145,'DEMO-SLMC-2502','Fictional demonstration clinician profile for MediLink. Specialization seed #2; details are synthetic and not linked to a real practitioner.',13,30,'VERIFIED'),
+(1074,1146,'DEMO-SLMC-2503','Fictional demonstration clinician profile for MediLink. Specialization seed #3; details are synthetic and not linked to a real practitioner.',15,20,'VERIFIED');
+INSERT INTO `HEALTHCARE_CENTRE` (`Centre_ID`,`Provider_ID`,`Centre_Name`,`Registration_No`,`Description`,`Verification_Status`) VALUES
+(1000,1003,'MediCare Colombo Medical Centre 1','DEMO-HC-0101','Synthetic MediLink demo healthcare centre with outpatient consultation services in Colombo.','VERIFIED'),
+(1001,1004,'Suwasetha Colombo Medical Centre 2','DEMO-HC-0102','Synthetic MediLink demo healthcare centre with outpatient consultation services in Colombo.','VERIFIED'),
+(1002,1005,'Lanka Health Colombo Medical Centre 3','DEMO-HC-0103','Synthetic MediLink demo healthcare centre with outpatient consultation services in Colombo.','VERIFIED'),
+(1003,1009,'Suwasetha Gampaha Medical Centre 1','DEMO-HC-0201','Synthetic MediLink demo healthcare centre with outpatient consultation services in Gampaha.','VERIFIED'),
+(1004,1010,'Lanka Health Gampaha Medical Centre 2','DEMO-HC-0202','Synthetic MediLink demo healthcare centre with outpatient consultation services in Gampaha.','VERIFIED'),
+(1005,1011,'WellLife Gampaha Medical Centre 3','DEMO-HC-0203','Synthetic MediLink demo healthcare centre with outpatient consultation services in Gampaha.','VERIFIED'),
+(1006,1015,'Lanka Health Kalutara Medical Centre 1','DEMO-HC-0301','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kalutara.','VERIFIED'),
+(1007,1016,'WellLife Kalutara Medical Centre 2','DEMO-HC-0302','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kalutara.','VERIFIED'),
+(1008,1017,'CarePoint Kalutara Medical Centre 3','DEMO-HC-0303','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kalutara.','VERIFIED'),
+(1009,1021,'WellLife Kandy Medical Centre 1','DEMO-HC-0401','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kandy.','VERIFIED'),
+(1010,1022,'CarePoint Kandy Medical Centre 2','DEMO-HC-0402','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kandy.','VERIFIED'),
+(1011,1023,'Serene Health Kandy Medical Centre 3','DEMO-HC-0403','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kandy.','VERIFIED'),
+(1012,1027,'CarePoint Matale Medical Centre 1','DEMO-HC-0501','Synthetic MediLink demo healthcare centre with outpatient consultation services in Matale.','VERIFIED'),
+(1013,1028,'Serene Health Matale Medical Centre 2','DEMO-HC-0502','Synthetic MediLink demo healthcare centre with outpatient consultation services in Matale.','VERIFIED'),
+(1014,1029,'FamilyCare Matale Medical Centre 3','DEMO-HC-0503','Synthetic MediLink demo healthcare centre with outpatient consultation services in Matale.','VERIFIED'),
+(1015,1033,'Serene Health Nuwara Eliya Medical Centre 1','DEMO-HC-0601','Synthetic MediLink demo healthcare centre with outpatient consultation services in Nuwara Eliya.','VERIFIED'),
+(1016,1034,'FamilyCare Nuwara Eliya Medical Centre 2','DEMO-HC-0602','Synthetic MediLink demo healthcare centre with outpatient consultation services in Nuwara Eliya.','VERIFIED'),
+(1017,1035,'Ceylon Medical Nuwara Eliya Medical Centre 3','DEMO-HC-0603','Synthetic MediLink demo healthcare centre with outpatient consultation services in Nuwara Eliya.','VERIFIED'),
+(1018,1039,'FamilyCare Galle Medical Centre 1','DEMO-HC-0701','Synthetic MediLink demo healthcare centre with outpatient consultation services in Galle.','VERIFIED'),
+(1019,1040,'Ceylon Medical Galle Medical Centre 2','DEMO-HC-0702','Synthetic MediLink demo healthcare centre with outpatient consultation services in Galle.','VERIFIED'),
+(1020,1041,'HealthyLife Galle Medical Centre 3','DEMO-HC-0703','Synthetic MediLink demo healthcare centre with outpatient consultation services in Galle.','VERIFIED'),
+(1021,1045,'Ceylon Medical Matara Medical Centre 1','DEMO-HC-0801','Synthetic MediLink demo healthcare centre with outpatient consultation services in Matara.','VERIFIED'),
+(1022,1046,'HealthyLife Matara Medical Centre 2','DEMO-HC-0802','Synthetic MediLink demo healthcare centre with outpatient consultation services in Matara.','VERIFIED'),
+(1023,1047,'Unity Care Matara Medical Centre 3','DEMO-HC-0803','Synthetic MediLink demo healthcare centre with outpatient consultation services in Matara.','VERIFIED'),
+(1024,1051,'HealthyLife Hambantota Medical Centre 1','DEMO-HC-0901','Synthetic MediLink demo healthcare centre with outpatient consultation services in Hambantota.','VERIFIED'),
+(1025,1052,'Unity Care Hambantota Medical Centre 2','DEMO-HC-0902','Synthetic MediLink demo healthcare centre with outpatient consultation services in Hambantota.','VERIFIED'),
+(1026,1053,'MediCare Hambantota Medical Centre 3','DEMO-HC-0903','Synthetic MediLink demo healthcare centre with outpatient consultation services in Hambantota.','VERIFIED'),
+(1027,1057,'Unity Care Jaffna Medical Centre 1','DEMO-HC-1001','Synthetic MediLink demo healthcare centre with outpatient consultation services in Jaffna.','VERIFIED'),
+(1028,1058,'MediCare Jaffna Medical Centre 2','DEMO-HC-1002','Synthetic MediLink demo healthcare centre with outpatient consultation services in Jaffna.','VERIFIED'),
+(1029,1059,'Suwasetha Jaffna Medical Centre 3','DEMO-HC-1003','Synthetic MediLink demo healthcare centre with outpatient consultation services in Jaffna.','VERIFIED'),
+(1030,1063,'MediCare Kilinochchi Medical Centre 1','DEMO-HC-1101','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kilinochchi.','VERIFIED'),
+(1031,1064,'Suwasetha Kilinochchi Medical Centre 2','DEMO-HC-1102','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kilinochchi.','VERIFIED'),
+(1032,1065,'Lanka Health Kilinochchi Medical Centre 3','DEMO-HC-1103','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kilinochchi.','VERIFIED'),
+(1033,1069,'Suwasetha Mannar Medical Centre 1','DEMO-HC-1201','Synthetic MediLink demo healthcare centre with outpatient consultation services in Mannar.','VERIFIED'),
+(1034,1070,'Lanka Health Mannar Medical Centre 2','DEMO-HC-1202','Synthetic MediLink demo healthcare centre with outpatient consultation services in Mannar.','VERIFIED'),
+(1035,1071,'WellLife Mannar Medical Centre 3','DEMO-HC-1203','Synthetic MediLink demo healthcare centre with outpatient consultation services in Mannar.','VERIFIED'),
+(1036,1075,'Lanka Health Vavuniya Medical Centre 1','DEMO-HC-1301','Synthetic MediLink demo healthcare centre with outpatient consultation services in Vavuniya.','VERIFIED'),
+(1037,1076,'WellLife Vavuniya Medical Centre 2','DEMO-HC-1302','Synthetic MediLink demo healthcare centre with outpatient consultation services in Vavuniya.','VERIFIED'),
+(1038,1077,'CarePoint Vavuniya Medical Centre 3','DEMO-HC-1303','Synthetic MediLink demo healthcare centre with outpatient consultation services in Vavuniya.','VERIFIED'),
+(1039,1081,'WellLife Mullaitivu Medical Centre 1','DEMO-HC-1401','Synthetic MediLink demo healthcare centre with outpatient consultation services in Mullaitivu.','VERIFIED'),
+(1040,1082,'CarePoint Mullaitivu Medical Centre 2','DEMO-HC-1402','Synthetic MediLink demo healthcare centre with outpatient consultation services in Mullaitivu.','VERIFIED'),
+(1041,1083,'Serene Health Mullaitivu Medical Centre 3','DEMO-HC-1403','Synthetic MediLink demo healthcare centre with outpatient consultation services in Mullaitivu.','VERIFIED'),
+(1042,1087,'CarePoint Batticaloa Medical Centre 1','DEMO-HC-1501','Synthetic MediLink demo healthcare centre with outpatient consultation services in Batticaloa.','VERIFIED'),
+(1043,1088,'Serene Health Batticaloa Medical Centre 2','DEMO-HC-1502','Synthetic MediLink demo healthcare centre with outpatient consultation services in Batticaloa.','VERIFIED'),
+(1044,1089,'FamilyCare Batticaloa Medical Centre 3','DEMO-HC-1503','Synthetic MediLink demo healthcare centre with outpatient consultation services in Batticaloa.','VERIFIED'),
+(1045,1093,'Serene Health Ampara Medical Centre 1','DEMO-HC-1601','Synthetic MediLink demo healthcare centre with outpatient consultation services in Ampara.','VERIFIED'),
+(1046,1094,'FamilyCare Ampara Medical Centre 2','DEMO-HC-1602','Synthetic MediLink demo healthcare centre with outpatient consultation services in Ampara.','VERIFIED'),
+(1047,1095,'Ceylon Medical Ampara Medical Centre 3','DEMO-HC-1603','Synthetic MediLink demo healthcare centre with outpatient consultation services in Ampara.','VERIFIED'),
+(1048,1099,'FamilyCare Trincomalee Medical Centre 1','DEMO-HC-1701','Synthetic MediLink demo healthcare centre with outpatient consultation services in Trincomalee.','VERIFIED'),
+(1049,1100,'Ceylon Medical Trincomalee Medical Centre 2','DEMO-HC-1702','Synthetic MediLink demo healthcare centre with outpatient consultation services in Trincomalee.','VERIFIED'),
+(1050,1101,'HealthyLife Trincomalee Medical Centre 3','DEMO-HC-1703','Synthetic MediLink demo healthcare centre with outpatient consultation services in Trincomalee.','VERIFIED'),
+(1051,1105,'Ceylon Medical Kurunegala Medical Centre 1','DEMO-HC-1801','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kurunegala.','VERIFIED'),
+(1052,1106,'HealthyLife Kurunegala Medical Centre 2','DEMO-HC-1802','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kurunegala.','VERIFIED'),
+(1053,1107,'Unity Care Kurunegala Medical Centre 3','DEMO-HC-1803','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kurunegala.','VERIFIED'),
+(1054,1111,'HealthyLife Puttalam Medical Centre 1','DEMO-HC-1901','Synthetic MediLink demo healthcare centre with outpatient consultation services in Puttalam.','VERIFIED'),
+(1055,1112,'Unity Care Puttalam Medical Centre 2','DEMO-HC-1902','Synthetic MediLink demo healthcare centre with outpatient consultation services in Puttalam.','VERIFIED'),
+(1056,1113,'MediCare Puttalam Medical Centre 3','DEMO-HC-1903','Synthetic MediLink demo healthcare centre with outpatient consultation services in Puttalam.','VERIFIED'),
+(1057,1117,'Unity Care Anuradhapura Medical Centre 1','DEMO-HC-2001','Synthetic MediLink demo healthcare centre with outpatient consultation services in Anuradhapura.','VERIFIED'),
+(1058,1118,'MediCare Anuradhapura Medical Centre 2','DEMO-HC-2002','Synthetic MediLink demo healthcare centre with outpatient consultation services in Anuradhapura.','VERIFIED'),
+(1059,1119,'Suwasetha Anuradhapura Medical Centre 3','DEMO-HC-2003','Synthetic MediLink demo healthcare centre with outpatient consultation services in Anuradhapura.','VERIFIED'),
+(1060,1123,'MediCare Polonnaruwa Medical Centre 1','DEMO-HC-2101','Synthetic MediLink demo healthcare centre with outpatient consultation services in Polonnaruwa.','VERIFIED'),
+(1061,1124,'Suwasetha Polonnaruwa Medical Centre 2','DEMO-HC-2102','Synthetic MediLink demo healthcare centre with outpatient consultation services in Polonnaruwa.','VERIFIED'),
+(1062,1125,'Lanka Health Polonnaruwa Medical Centre 3','DEMO-HC-2103','Synthetic MediLink demo healthcare centre with outpatient consultation services in Polonnaruwa.','VERIFIED'),
+(1063,1129,'Suwasetha Badulla Medical Centre 1','DEMO-HC-2201','Synthetic MediLink demo healthcare centre with outpatient consultation services in Badulla.','VERIFIED'),
+(1064,1130,'Lanka Health Badulla Medical Centre 2','DEMO-HC-2202','Synthetic MediLink demo healthcare centre with outpatient consultation services in Badulla.','VERIFIED'),
+(1065,1131,'WellLife Badulla Medical Centre 3','DEMO-HC-2203','Synthetic MediLink demo healthcare centre with outpatient consultation services in Badulla.','VERIFIED'),
+(1066,1135,'Lanka Health Monaragala Medical Centre 1','DEMO-HC-2301','Synthetic MediLink demo healthcare centre with outpatient consultation services in Monaragala.','VERIFIED'),
+(1067,1136,'WellLife Monaragala Medical Centre 2','DEMO-HC-2302','Synthetic MediLink demo healthcare centre with outpatient consultation services in Monaragala.','VERIFIED'),
+(1068,1137,'CarePoint Monaragala Medical Centre 3','DEMO-HC-2303','Synthetic MediLink demo healthcare centre with outpatient consultation services in Monaragala.','VERIFIED'),
+(1069,1141,'WellLife Ratnapura Medical Centre 1','DEMO-HC-2401','Synthetic MediLink demo healthcare centre with outpatient consultation services in Ratnapura.','VERIFIED'),
+(1070,1142,'CarePoint Ratnapura Medical Centre 2','DEMO-HC-2402','Synthetic MediLink demo healthcare centre with outpatient consultation services in Ratnapura.','VERIFIED'),
+(1071,1143,'Serene Health Ratnapura Medical Centre 3','DEMO-HC-2403','Synthetic MediLink demo healthcare centre with outpatient consultation services in Ratnapura.','VERIFIED'),
+(1072,1147,'CarePoint Kegalle Medical Centre 1','DEMO-HC-2501','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kegalle.','VERIFIED'),
+(1073,1148,'Serene Health Kegalle Medical Centre 2','DEMO-HC-2502','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kegalle.','VERIFIED'),
+(1074,1149,'FamilyCare Kegalle Medical Centre 3','DEMO-HC-2503','Synthetic MediLink demo healthcare centre with outpatient consultation services in Kegalle.','VERIFIED');
+INSERT INTO `DOCTOR_SPECIALIZATION` (`Doctor_ID`,`Specialization_ID`) VALUES
+(1000,1),
+(1001,2),
+(1002,3),
+(1003,2),
+(1003,1),
+(1004,3),
+(1005,4),
+(1006,3),
+(1006,1),
+(1007,4),
+(1008,5),
+(1009,4),
+(1009,1),
+(1010,5),
+(1011,6),
+(1012,5),
+(1012,1),
+(1013,6),
+(1014,7),
+(1015,6),
+(1015,1),
+(1016,7),
+(1017,8),
+(1018,7),
+(1018,1),
+(1019,8),
+(1020,1),
+(1021,8),
+(1021,1),
+(1022,1),
+(1023,2),
+(1024,1),
+(1025,2),
+(1026,3),
+(1027,2),
+(1027,1),
+(1028,3),
+(1029,4),
+(1030,3),
+(1030,1),
+(1031,4),
+(1032,5),
+(1033,4),
+(1033,1),
+(1034,5),
+(1035,6),
+(1036,5),
+(1036,1),
+(1037,6),
+(1038,7),
+(1039,6),
+(1039,1),
+(1040,7),
+(1041,8),
+(1042,7),
+(1042,1),
+(1043,8),
+(1044,1),
+(1045,8),
+(1045,1),
+(1046,1),
+(1047,2),
+(1048,1),
+(1049,2),
+(1050,3),
+(1051,2),
+(1051,1),
+(1052,3),
+(1053,4),
+(1054,3),
+(1054,1),
+(1055,4),
+(1056,5),
+(1057,4),
+(1057,1),
+(1058,5),
+(1059,6),
+(1060,5),
+(1060,1),
+(1061,6),
+(1062,7),
+(1063,6),
+(1063,1),
+(1064,7),
+(1065,8),
+(1066,7),
+(1066,1),
+(1067,8),
+(1068,1),
+(1069,8),
+(1069,1),
+(1070,1),
+(1071,2),
+(1072,1),
+(1073,2),
+(1074,3);
+INSERT INTO `CENTRE_DOCTOR_LINK` (`Centre_ID`,`Doctor_ID`,`Joined_Date`,`Status`) VALUES
+(1000,1000,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1001,1001,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1002,1002,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1003,1003,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1004,1004,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1005,1005,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1006,1006,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1007,1007,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1008,1008,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1009,1009,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1010,1010,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1011,1011,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1012,1012,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1013,1013,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1014,1014,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1015,1015,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1016,1016,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1017,1017,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1018,1018,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1019,1019,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1020,1020,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1021,1021,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1022,1022,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1023,1023,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1024,1024,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1025,1025,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1026,1026,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1027,1027,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1028,1028,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1029,1029,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1030,1030,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1031,1031,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1032,1032,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1033,1033,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1034,1034,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1035,1035,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1036,1036,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1037,1037,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1038,1038,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1039,1039,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1040,1040,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1041,1041,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1042,1042,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1043,1043,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1044,1044,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1045,1045,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1046,1046,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1047,1047,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1048,1048,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1049,1049,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1050,1050,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1051,1051,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1052,1052,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1053,1053,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1054,1054,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1055,1055,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1056,1056,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1057,1057,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1058,1058,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1059,1059,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1060,1060,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1061,1061,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1062,1062,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1063,1063,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1064,1064,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1065,1065,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1066,1066,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1067,1067,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1068,1068,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1069,1069,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1070,1070,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1071,1071,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1072,1072,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1073,1073,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE'),
+(1074,1074,DATE_SUB(CURRENT_DATE, INTERVAL 180 DAY),'ACTIVE');
+
+-- Active provider subscriptions for all fictional 25-district demo providers.
+INSERT INTO `USER_SUBSCRIPTION` (`User_Subscription_ID`, `User_ID`, `Plan_ID`, `Start_Date`, `End_Date`, `Status`, `Payment_Reference_No`) VALUES
+(1000, 1000, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1000'),
+(1001, 1001, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1001'),
+(1002, 1002, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1002'),
+(1003, 1003, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1003'),
+(1004, 1004, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1004'),
+(1005, 1005, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1005'),
+(1006, 1006, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1006'),
+(1007, 1007, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1007'),
+(1008, 1008, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1008'),
+(1009, 1009, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1009'),
+(1010, 1010, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1010'),
+(1011, 1011, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1011'),
+(1012, 1012, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1012'),
+(1013, 1013, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1013'),
+(1014, 1014, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1014'),
+(1015, 1015, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1015'),
+(1016, 1016, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1016'),
+(1017, 1017, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1017'),
+(1018, 1018, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1018'),
+(1019, 1019, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1019'),
+(1020, 1020, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1020'),
+(1021, 1021, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1021'),
+(1022, 1022, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1022'),
+(1023, 1023, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1023'),
+(1024, 1024, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1024'),
+(1025, 1025, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1025'),
+(1026, 1026, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1026'),
+(1027, 1027, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1027'),
+(1028, 1028, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1028'),
+(1029, 1029, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1029'),
+(1030, 1030, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1030'),
+(1031, 1031, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1031'),
+(1032, 1032, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1032'),
+(1033, 1033, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1033'),
+(1034, 1034, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1034'),
+(1035, 1035, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1035'),
+(1036, 1036, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1036'),
+(1037, 1037, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1037'),
+(1038, 1038, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1038'),
+(1039, 1039, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1039'),
+(1040, 1040, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1040'),
+(1041, 1041, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1041'),
+(1042, 1042, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1042'),
+(1043, 1043, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1043'),
+(1044, 1044, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1044'),
+(1045, 1045, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1045'),
+(1046, 1046, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1046'),
+(1047, 1047, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1047'),
+(1048, 1048, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1048'),
+(1049, 1049, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1049'),
+(1050, 1050, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1050'),
+(1051, 1051, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1051'),
+(1052, 1052, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1052'),
+(1053, 1053, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1053'),
+(1054, 1054, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1054'),
+(1055, 1055, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1055'),
+(1056, 1056, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1056'),
+(1057, 1057, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1057'),
+(1058, 1058, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1058'),
+(1059, 1059, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1059'),
+(1060, 1060, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1060'),
+(1061, 1061, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1061'),
+(1062, 1062, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1062'),
+(1063, 1063, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1063'),
+(1064, 1064, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1064'),
+(1065, 1065, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1065'),
+(1066, 1066, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1066'),
+(1067, 1067, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1067'),
+(1068, 1068, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1068'),
+(1069, 1069, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1069'),
+(1070, 1070, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1070'),
+(1071, 1071, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1071'),
+(1072, 1072, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1072'),
+(1073, 1073, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1073'),
+(1074, 1074, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1074'),
+(1075, 1075, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1075'),
+(1076, 1076, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1076'),
+(1077, 1077, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1077'),
+(1078, 1078, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1078'),
+(1079, 1079, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1079'),
+(1080, 1080, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1080'),
+(1081, 1081, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1081'),
+(1082, 1082, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1082'),
+(1083, 1083, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1083'),
+(1084, 1084, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1084'),
+(1085, 1085, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1085'),
+(1086, 1086, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1086'),
+(1087, 1087, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1087'),
+(1088, 1088, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1088'),
+(1089, 1089, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1089'),
+(1090, 1090, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1090'),
+(1091, 1091, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1091'),
+(1092, 1092, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1092'),
+(1093, 1093, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1093'),
+(1094, 1094, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1094'),
+(1095, 1095, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1095'),
+(1096, 1096, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1096'),
+(1097, 1097, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1097'),
+(1098, 1098, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1098'),
+(1099, 1099, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1099'),
+(1100, 1100, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1100'),
+(1101, 1101, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1101'),
+(1102, 1102, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1102'),
+(1103, 1103, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1103'),
+(1104, 1104, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1104'),
+(1105, 1105, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1105'),
+(1106, 1106, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1106'),
+(1107, 1107, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1107'),
+(1108, 1108, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1108'),
+(1109, 1109, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1109'),
+(1110, 1110, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1110'),
+(1111, 1111, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1111'),
+(1112, 1112, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1112'),
+(1113, 1113, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1113'),
+(1114, 1114, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1114'),
+(1115, 1115, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1115'),
+(1116, 1116, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1116'),
+(1117, 1117, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1117'),
+(1118, 1118, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1118'),
+(1119, 1119, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1119'),
+(1120, 1120, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1120'),
+(1121, 1121, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1121'),
+(1122, 1122, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1122'),
+(1123, 1123, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1123'),
+(1124, 1124, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1124'),
+(1125, 1125, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1125'),
+(1126, 1126, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1126'),
+(1127, 1127, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1127'),
+(1128, 1128, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1128'),
+(1129, 1129, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1129'),
+(1130, 1130, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1130'),
+(1131, 1131, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1131'),
+(1132, 1132, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1132'),
+(1133, 1133, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1133'),
+(1134, 1134, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1134'),
+(1135, 1135, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1135'),
+(1136, 1136, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1136'),
+(1137, 1137, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1137'),
+(1138, 1138, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1138'),
+(1139, 1139, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1139'),
+(1140, 1140, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1140'),
+(1141, 1141, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1141'),
+(1142, 1142, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1142'),
+(1143, 1143, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1143'),
+(1144, 1144, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1144'),
+(1145, 1145, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1145'),
+(1146, 1146, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1146'),
+(1147, 1147, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1147'),
+(1148, 1148, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1148'),
+(1149, 1149, 4, DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 365 DAY), 'ACTIVE', 'DEMO-PROVIDER-ACTIVE-1149');
+INSERT INTO `SCHEDULED_SLOT` (`Slot_ID`,`Provider_ID`,`Doctor_ID`,`Slot_Date`,`Start_Time`,`End_Time`,`Status`) VALUES
+(1000,1000,1000,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1001,1000,1000,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1002,1001,1001,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1003,1001,1001,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1004,1002,1002,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1005,1002,1002,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1006,1003,1000,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1007,1004,1001,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1008,1005,1002,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1009,1006,1003,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1010,1006,1003,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1011,1007,1004,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1012,1007,1004,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1013,1008,1005,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1014,1008,1005,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1015,1009,1003,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1016,1010,1004,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1017,1011,1005,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1018,1012,1006,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1019,1012,1006,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1020,1013,1007,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1021,1013,1007,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1022,1014,1008,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1023,1014,1008,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1024,1015,1006,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1025,1016,1007,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1026,1017,1008,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1027,1018,1009,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1028,1018,1009,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1029,1019,1010,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1030,1019,1010,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1031,1020,1011,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1032,1020,1011,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1033,1021,1009,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1034,1022,1010,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1035,1023,1011,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1036,1024,1012,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1037,1024,1012,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1038,1025,1013,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1039,1025,1013,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1040,1026,1014,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1041,1026,1014,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1042,1027,1012,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1043,1028,1013,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1044,1029,1014,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1045,1030,1015,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1046,1030,1015,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1047,1031,1016,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1048,1031,1016,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1049,1032,1017,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1050,1032,1017,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1051,1033,1015,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1052,1034,1016,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1053,1035,1017,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1054,1036,1018,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1055,1036,1018,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1056,1037,1019,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1057,1037,1019,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1058,1038,1020,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1059,1038,1020,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1060,1039,1018,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1061,1040,1019,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1062,1041,1020,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1063,1042,1021,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1064,1042,1021,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1065,1043,1022,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1066,1043,1022,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1067,1044,1023,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1068,1044,1023,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1069,1045,1021,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1070,1046,1022,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1071,1047,1023,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1072,1048,1024,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1073,1048,1024,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1074,1049,1025,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1075,1049,1025,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1076,1050,1026,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1077,1050,1026,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1078,1051,1024,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1079,1052,1025,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1080,1053,1026,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1081,1054,1027,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1082,1054,1027,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1083,1055,1028,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1084,1055,1028,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1085,1056,1029,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1086,1056,1029,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1087,1057,1027,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1088,1058,1028,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1089,1059,1029,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1090,1060,1030,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1091,1060,1030,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1092,1061,1031,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1093,1061,1031,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1094,1062,1032,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1095,1062,1032,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1096,1063,1030,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1097,1064,1031,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1098,1065,1032,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1099,1066,1033,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1100,1066,1033,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1101,1067,1034,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1102,1067,1034,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1103,1068,1035,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1104,1068,1035,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1105,1069,1033,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1106,1070,1034,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1107,1071,1035,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1108,1072,1036,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1109,1072,1036,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1110,1073,1037,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1111,1073,1037,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1112,1074,1038,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1113,1074,1038,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1114,1075,1036,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1115,1076,1037,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1116,1077,1038,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1117,1078,1039,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1118,1078,1039,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1119,1079,1040,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1120,1079,1040,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1121,1080,1041,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1122,1080,1041,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1123,1081,1039,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1124,1082,1040,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1125,1083,1041,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1126,1084,1042,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1127,1084,1042,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1128,1085,1043,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1129,1085,1043,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1130,1086,1044,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1131,1086,1044,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1132,1087,1042,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1133,1088,1043,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1134,1089,1044,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1135,1090,1045,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1136,1090,1045,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1137,1091,1046,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1138,1091,1046,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1139,1092,1047,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1140,1092,1047,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1141,1093,1045,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1142,1094,1046,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1143,1095,1047,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1144,1096,1048,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1145,1096,1048,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1146,1097,1049,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1147,1097,1049,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1148,1098,1050,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1149,1098,1050,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1150,1099,1048,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1151,1100,1049,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1152,1101,1050,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1153,1102,1051,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1154,1102,1051,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1155,1103,1052,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1156,1103,1052,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1157,1104,1053,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1158,1104,1053,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1159,1105,1051,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1160,1106,1052,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1161,1107,1053,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1162,1108,1054,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1163,1108,1054,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1164,1109,1055,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1165,1109,1055,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1166,1110,1056,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1167,1110,1056,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1168,1111,1054,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1169,1112,1055,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1170,1113,1056,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1171,1114,1057,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1172,1114,1057,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1173,1115,1058,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1174,1115,1058,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1175,1116,1059,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1176,1116,1059,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1177,1117,1057,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1178,1118,1058,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1179,1119,1059,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1180,1120,1060,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1181,1120,1060,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1182,1121,1061,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1183,1121,1061,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1184,1122,1062,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1185,1122,1062,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1186,1123,1060,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1187,1124,1061,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1188,1125,1062,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1189,1126,1063,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1190,1126,1063,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1191,1127,1064,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1192,1127,1064,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1193,1128,1065,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1194,1128,1065,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1195,1129,1063,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1196,1130,1064,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1197,1131,1065,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1198,1132,1066,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1199,1132,1066,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1200,1133,1067,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1201,1133,1067,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1202,1134,1068,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1203,1134,1068,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1204,1135,1066,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1205,1136,1067,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1206,1137,1068,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1207,1138,1069,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1208,1138,1069,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1209,1139,1070,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1210,1139,1070,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1211,1140,1071,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1212,1140,1071,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1213,1141,1069,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1214,1142,1070,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1215,1143,1071,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1216,1144,1072,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1217,1144,1072,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1218,1145,1073,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1219,1145,1073,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1220,1146,1074,DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY),'09:00:00','09:20:00','AVAILABLE'),
+(1221,1146,1074,DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY),'16:00:00','16:20:00','AVAILABLE'),
+(1222,1147,1072,DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1223,1148,1073,DATE_ADD(CURRENT_DATE, INTERVAL 4 DAY),'10:00:00','10:30:00','AVAILABLE'),
+(1224,1149,1074,DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY),'10:00:00','10:30:00','AVAILABLE');
+
 INSERT INTO `USER_SUBSCRIPTION` (`User_Subscription_ID`, `User_ID`, `Plan_ID`, `Start_Date`, `End_Date`, `Status`, `Payment_Reference_No`) VALUES
 (1, 2, 2, DATE_SUB(CURRENT_DATE, INTERVAL 5 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 360 DAY), 'ACTIVE', 'PAY-LKR-20260901-893214'),
 (2, 3, 1, DATE_SUB(CURRENT_DATE, INTERVAL 400 DAY), DATE_SUB(CURRENT_DATE, INTERVAL 35 DAY), 'EXPIRED', 'PAY-LKR-20260715-442190'),
 (3, 4, 4, DATE_SUB(CURRENT_DATE, INTERVAL 10 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 20 DAY), 'ACTIVE', 'PAY-LKR-20260825-778812'),
 (4, 7, 4, DATE_SUB(CURRENT_DATE, INTERVAL 10 DAY), DATE_ADD(CURRENT_DATE, INTERVAL 20 DAY), 'ACTIVE', 'PAY-LKR-20260825-992233');
-
--- Scheduled Slots for Tomorrow and Upcoming Days
 INSERT INTO `SCHEDULED_SLOT` (`Slot_ID`, `Provider_ID`, `Doctor_ID`, `Slot_Date`, `Start_Time`, `End_Time`, `Status`) VALUES
--- Slots for Dr. Ruwan (Provider 1, Doctor 1)
 (1, 1, 1, DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY), '09:00:00', '09:20:00', 'AVAILABLE'),
 (2, 1, 1, DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY), '09:20:00', '09:40:00', 'AVAILABLE'),
 (3, 1, 1, DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY), '09:40:00', '10:00:00', 'BOOKED'),
 (4, 1, 1, DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY), '16:00:00', '16:20:00', 'AVAILABLE'),
 (5, 1, 1, DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY), '16:20:00', '16:40:00', 'AVAILABLE'),
--- Slots for Dr. Anoma (Provider 2, Doctor 2 - Kandy)
 (6, 2, 2, DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY), '10:00:00', '10:15:00', 'AVAILABLE'),
 (7, 2, 2, DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY), '10:15:00', '10:30:00', 'AVAILABLE'),
 (8, 2, 2, DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY), '10:30:00', '10:45:00', 'AVAILABLE'),
--- Slots for Dr. Chaminda (Provider 3, Doctor 3 - Negombo)
 (9, 3, 3, DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY), '14:00:00', '14:20:00', 'AVAILABLE'),
 (10, 3, 3, DATE_ADD(CURRENT_DATE, INTERVAL 2 DAY), '14:20:00', '14:40:00', 'AVAILABLE'),
--- Slots for Lanka Care Centre (Provider 4 - Affiliated Doctor 1)
 (11, 4, 1, DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY), '17:00:00', '17:20:00', 'AVAILABLE'),
 (12, 4, 1, DATE_ADD(CURRENT_DATE, INTERVAL 3 DAY), '17:20:00', '17:40:00', 'AVAILABLE');
-
--- Sample Appointment
 INSERT INTO `APPOINTMENT` (`Appointment_ID`, `Client_ID`, `Slot_ID`, `Booking_DateTime`, `Status`, `Notes`) VALUES
 (1, 1, 3, NOW(), 'CONFIRMED', 'Regular cardiac checkup and blood pressure review.');
-
--- =======================================================================
--- STORED PROCEDURES
--- =======================================================================
-
-DELIMITER $$
-
--- 1. PROCEDURE: sp_BookAppointment
--- Atomically books an appointment with concurrency lock, subscription check, and quota validation.
-DROP PROCEDURE IF EXISTS `sp_BookAppointment`$$
-CREATE PROCEDURE `sp_BookAppointment`(
-    IN  p_client_id      INT,
-    IN  p_slot_id        INT,
-    IN  p_notes          TEXT,
-    OUT p_status         VARCHAR(50),
-    OUT p_appointment_id INT
-)
-proc_label: BEGIN
-    DECLARE v_user_id INT DEFAULT NULL;
-    DECLARE v_slot_status VARCHAR(20) DEFAULT NULL;
-    DECLARE v_plan_id INT DEFAULT NULL;
-    DECLARE v_max_bookings INT DEFAULT 0;
-    DECLARE v_used_bookings INT DEFAULT 0;
-
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        ROLLBACK;
-        SET p_status = 'SQL_ERROR';
-        SET p_appointment_id = NULL;
-    END;
-
-    -- Verify Client
-    SELECT `User_ID` INTO v_user_id 
-    FROM `CLIENT` 
-    WHERE `Client_ID` = p_client_id 
-    LIMIT 1;
-
-    IF v_user_id IS NULL THEN
-        SET p_status = 'CLIENT_NOT_FOUND';
-        SET p_appointment_id = NULL;
-        LEAVE proc_label;
-    END IF;
-
-    -- Verify Active Subscription
-    SELECT us.`Plan_ID`, sp.`Max_Book_per_Month`
-    INTO v_plan_id, v_max_bookings
-    FROM `USER_SUBSCRIPTION` us
-    JOIN `SUBSCRIPTION_PLAN` sp ON us.`Plan_ID` = sp.`Plan_ID`
-    WHERE us.`User_ID` = v_user_id
-      AND us.`Status` = 'ACTIVE'
-      AND CURRENT_DATE BETWEEN us.`Start_Date` AND us.`End_Date`
-    ORDER BY us.`End_Date` DESC
-    LIMIT 1;
-
-    IF v_plan_id IS NULL THEN
-        SET p_status = 'NO_ACTIVE_SUBSCRIPTION';
-        SET p_appointment_id = NULL;
-        LEAVE proc_label;
-    END IF;
-
-    -- Check Monthly Quota
-    SELECT COUNT(*) INTO v_used_bookings
-    FROM `APPOINTMENT`
-    WHERE `Client_ID` = p_client_id
-      AND MONTH(`Booking_DateTime`) = MONTH(CURRENT_DATE)
-      AND YEAR(`Booking_DateTime`) = YEAR(CURRENT_DATE)
-      AND `Status` IN ('BOOKED', 'CONFIRMED', 'COMPLETED');
-
-    IF v_used_bookings >= v_max_bookings THEN
-        SET p_status = 'QUOTA_EXCEEDED';
-        SET p_appointment_id = NULL;
-        LEAVE proc_label;
-    END IF;
-
-    -- Begin Atomic Transaction & Pessimistic Row Lock
-    START TRANSACTION;
-
-    SELECT `Status` INTO v_slot_status
-    FROM `SCHEDULED_SLOT`
-    WHERE `Slot_ID` = p_slot_id
-    FOR UPDATE;
-
-    IF v_slot_status IS NULL THEN
-        ROLLBACK;
-        SET p_status = 'SLOT_NOT_FOUND';
-        SET p_appointment_id = NULL;
-        LEAVE proc_label;
-    ELSEIF v_slot_status <> 'AVAILABLE' THEN
-        ROLLBACK;
-        SET p_status = 'SLOT_UNAVAILABLE';
-        SET p_appointment_id = NULL;
-        LEAVE proc_label;
-    END IF;
-
-    INSERT INTO `APPOINTMENT` (
-        `Client_ID`, 
-        `Slot_ID`, 
-        `Booking_DateTime`, 
-        `Status`, 
-        `Notes`
-    ) VALUES (
-        p_client_id, 
-        p_slot_id, 
-        NOW(), 
-        'CONFIRMED', 
-        p_notes
-    );
-
-    SET p_appointment_id = LAST_INSERT_ID();
-
-    UPDATE `SCHEDULED_SLOT` 
-    SET `Status` = 'BOOKED' 
-    WHERE `Slot_ID` = p_slot_id;
-
-    COMMIT;
-    SET p_status = 'SUCCESS';
-END proc_label$$
-
-
--- 2. PROCEDURE: sp_CancelAppointment
--- Safely cancels an appointment and restores slot to AVAILABLE.
-DROP PROCEDURE IF EXISTS `sp_CancelAppointment`$$
-CREATE PROCEDURE `sp_CancelAppointment`(
-    IN  p_appointment_id INT,
-    IN  p_client_id      INT,
-    OUT p_status         VARCHAR(50)
-)
-proc_label: BEGIN
-    DECLARE v_slot_id INT DEFAULT NULL;
-    DECLARE v_current_status VARCHAR(20) DEFAULT NULL;
-    DECLARE v_appt_client_id INT DEFAULT NULL;
-
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        ROLLBACK;
-        SET p_status = 'SQL_ERROR';
-    END;
-
-    SELECT `Slot_ID`, `Status`, `Client_ID` 
-    INTO v_slot_id, v_current_status, v_appt_client_id
-    FROM `APPOINTMENT`
-    WHERE `Appointment_ID` = p_appointment_id
-    LIMIT 1;
-
-    IF v_slot_id IS NULL THEN
-        SET p_status = 'APPOINTMENT_NOT_FOUND';
-        LEAVE proc_label;
-    END IF;
-
-    IF p_client_id IS NOT NULL AND v_appt_client_id <> p_client_id THEN
-        SET p_status = 'UNAUTHORIZED';
-        LEAVE proc_label;
-    END IF;
-
-    IF v_current_status = 'CANCELLED' THEN
-        SET p_status = 'ALREADY_CANCELLED';
-        LEAVE proc_label;
-    ELSEIF v_current_status = 'COMPLETED' THEN
-        SET p_status = 'CANNOT_CANCEL_COMPLETED';
-        LEAVE proc_label;
-    END IF;
-
-    START TRANSACTION;
-
-    UPDATE `APPOINTMENT` 
-    SET `Status` = 'CANCELLED', `Updated_At` = NOW()
-    WHERE `Appointment_ID` = p_appointment_id;
-
-    UPDATE `SCHEDULED_SLOT`
-    SET `Status` = 'AVAILABLE'
-    WHERE `Slot_ID` = v_slot_id;
-
-    COMMIT;
-    SET p_status = 'SUCCESS';
-END proc_label$$
-
-
--- 3. PROCEDURE: sp_GetDoctorAvailableSlots
--- Retrieves available slots for a doctor with clinic and duration details.
-DROP PROCEDURE IF EXISTS `sp_GetDoctorAvailableSlots`$$
-CREATE PROCEDURE `sp_GetDoctorAvailableSlots`(
-    IN p_doctor_id  INT,
-    IN p_start_date DATE,
-    IN p_end_date   DATE
-)
-BEGIN
-    SELECT 
-        s.`Slot_ID`,
-        s.`Slot_Date`,
-        s.`Start_Time`,
-        s.`End_Time`,
-        s.`Status`,
-        p.`Business_Name` AS `Clinic_Name`,
-        p.`City` AS `Clinic_City`,
-        p.`Address` AS `Clinic_Address`,
-        CONCAT(u.`First_Name`, ' ', u.`Last_Name`) AS `Doctor_Name`,
-        d.`Medical_License_No`,
-        d.`Consultation_Duration`
-    FROM `SCHEDULED_SLOT` s
-    JOIN `PROVIDER` p ON s.`Provider_ID` = p.`Provider_ID`
-    LEFT JOIN `DOCTOR` d ON s.`Doctor_ID` = d.`Doctor_ID`
-    LEFT JOIN `PROVIDER` dp ON d.`Provider_ID` = dp.`Provider_ID`
-    LEFT JOIN `USER` u ON dp.`User_ID` = u.`User_ID`
-    WHERE (s.`Doctor_ID` = p_doctor_id OR (s.`Doctor_ID` IS NULL AND p.`Provider_ID` = (SELECT `Provider_ID` FROM `DOCTOR` WHERE `Doctor_ID` = p_doctor_id)))
-      AND s.`Slot_Date` BETWEEN p_start_date AND p_end_date
-      AND s.`Status` = 'AVAILABLE'
-    ORDER BY s.`Slot_Date` ASC, s.`Start_Time` ASC;
-END$$
-
-
--- 4. PROCEDURE: sp_GetClientSubscriptionSummary
--- Computes subscription validity, remaining days, and remaining booking quota.
-DROP PROCEDURE IF EXISTS `sp_GetClientSubscriptionSummary`$$
-CREATE PROCEDURE `sp_GetClientSubscriptionSummary`(
-    IN  p_client_id          INT,
-    OUT p_has_active_plan    INT,
-    OUT p_plan_name          VARCHAR(100),
-    OUT p_days_remaining     INT,
-    OUT p_monthly_quota      INT,
-    OUT p_bookings_used      INT,
-    OUT p_bookings_remaining INT
-)
-BEGIN
-    DECLARE v_user_id INT DEFAULT NULL;
-    DECLARE v_end_date DATE DEFAULT NULL;
-
-    SET p_has_active_plan = 0;
-    SET p_plan_name = 'No Active Subscription';
-    SET p_days_remaining = 0;
-    SET p_monthly_quota = 0;
-    SET p_bookings_used = 0;
-    SET p_bookings_remaining = 0;
-
-    SELECT `User_ID` INTO v_user_id 
-    FROM `CLIENT` 
-    WHERE `Client_ID` = p_client_id 
-    LIMIT 1;
-
-    IF v_user_id IS NOT NULL THEN
-        SELECT 
-            sp.`Plan_Name`,
-            DATEDIFF(us.`End_Date`, CURRENT_DATE),
-            sp.`Max_Book_per_Month`,
-            us.`End_Date`
-        INTO 
-            p_plan_name,
-            p_days_remaining,
-            p_monthly_quota,
-            v_end_date
-        FROM `USER_SUBSCRIPTION` us
-        JOIN `SUBSCRIPTION_PLAN` sp ON us.`Plan_ID` = sp.`Plan_ID`
-        WHERE us.`User_ID` = v_user_id
-          AND us.`Status` = 'ACTIVE'
-          AND CURRENT_DATE BETWEEN us.`Start_Date` AND us.`End_Date`
-        ORDER BY us.`End_Date` DESC
-        LIMIT 1;
-
-        IF v_end_date IS NOT NULL THEN
-            SET p_has_active_plan = 1;
-
-            SELECT COUNT(*) INTO p_bookings_used
-            FROM `APPOINTMENT`
-            WHERE `Client_ID` = p_client_id
-              AND MONTH(`Booking_DateTime`) = MONTH(CURRENT_DATE)
-              AND YEAR(`Booking_DateTime`) = YEAR(CURRENT_DATE)
-              AND `Status` IN ('BOOKED', 'CONFIRMED', 'COMPLETED');
-
-            IF p_monthly_quota > p_bookings_used THEN
-                SET p_bookings_remaining = p_monthly_quota - p_bookings_used;
-            ELSE
-                SET p_bookings_remaining = 0;
-            END IF;
-        END IF;
-    END IF;
-END$$
-
-DELIMITER ;
-

@@ -1,7 +1,5 @@
 <?php
-/**
- * Authentication and Authorization Guard Helper
- */
+
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/functions.php';
@@ -10,37 +8,27 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/**
- * Check if a user is currently logged in
- */
+
 function isLoggedIn(): bool {
     return !empty($_SESSION['user']) && !empty($_SESSION['user']['user_id']);
 }
 
-/**
- * Get logged-in user data from session
- */
+
 function getCurrentUser(): ?array {
     return $_SESSION['user'] ?? null;
 }
 
-/**
- * Get logged-in User ID
- */
+
 function getCurrentUserId(): ?int {
     return $_SESSION['user']['user_id'] ?? null;
 }
 
-/**
- * Get logged-in User Role
- */
+
 function getCurrentUserRole(): ?string {
     return $_SESSION['user']['role'] ?? null;
 }
 
-/**
- * Require user to be authenticated, otherwise redirect to login
- */
+
 function requireLogin(): void {
     if (!isLoggedIn()) {
         setFlash('warning', 'Please sign in to access this page.');
@@ -48,11 +36,33 @@ function requireLogin(): void {
         $_SESSION['return_to'] = $currentUrl;
         redirect('public/login.php');
     }
+
+    // Re-check account status on protected requests so a suspended account
+    // cannot continue using an already-open session.
+    $db = Database::getConnection();
+    $stmt = $db->prepare("SELECT Account_Status, Role_Type FROM `USER` WHERE User_ID = ?");
+    $stmt->execute([getCurrentUserId()]);
+    $live = $stmt->fetch();
+    if (!$live || $live['Account_Status'] !== 'ACTIVE' || $live['Role_Type'] !== getCurrentUserRole()) {
+        logoutUser();
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        setFlash('danger', 'Your account is not currently active. Please contact the appropriate administrator.');
+        redirect('public/login.php');
+    }
+
+    if ($live['Role_Type'] === ROLE_PROVIDER) {
+        $v = $db->prepare("SELECT Verification_Status FROM `PROVIDER` WHERE User_ID = ?");
+        $v->execute([getCurrentUserId()]);
+        if ($v->fetchColumn() !== STATUS_VERIFIED) {
+            logoutUser();
+            if (session_status() === PHP_SESSION_NONE) session_start();
+            setFlash('warning', 'Your provider account is not currently verified.');
+            redirect('public/login.php');
+        }
+    }
 }
 
-/**
- * Require specific role(s) to access page
- */
+
 function requireRole(array|string $allowedRoles): void {
     requireLogin();
     
@@ -64,8 +74,11 @@ function requireRole(array|string $allowedRoles): void {
     if (!in_array($userRole, $allowedRoles, true)) {
         setFlash('danger', 'Unauthorized access! You do not have permission to view that resource.');
         
-        // Redirect to appropriate user dashboard
+        
         switch ($userRole) {
+            case ROLE_OWNER:
+                redirect('owner/dashboard.php');
+                break;
             case ROLE_ADMIN:
                 redirect('admin/dashboard.php');
                 break;
@@ -82,13 +95,16 @@ function requireRole(array|string $allowedRoles): void {
     }
 }
 
-/**
- * Set session for authenticated user with associated profile IDs
- */
+
 function loginUser(array $user): void {
+    
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
+
     $db = Database::getConnection();
     
-    // Fetch associated client or provider profile details
+    
     $clientId = null;
     $providerId = null;
     $providerType = null;
@@ -125,7 +141,7 @@ function loginUser(array $user): void {
         }
     }
 
-    // Populate secure session array
+    
     $_SESSION['user'] = [
         'user_id'          => (int)$user['User_ID'],
         'email'            => $user['Email'],
@@ -144,9 +160,7 @@ function loginUser(array $user): void {
     ];
 }
 
-/**
- * Destroy current session on logout
- */
+
 function logoutUser(): void {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();

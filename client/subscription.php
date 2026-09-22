@@ -1,7 +1,5 @@
 <?php
-/**
- * Client Subscription Management & LKR Demo Payment Checkout
- */
+
 
 $pageTitle = 'My Subscription & Quotas';
 require_once __DIR__ . '/../config/database.php';
@@ -17,20 +15,20 @@ $clientId = $currentUser['client_id'];
 
 $db = Database::getConnection();
 
-// Process Subscription Purchase / Renewal via Demo Gateway
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'subscribe') {
     CSRF::check();
 
     $planId = (int)($_POST['plan_id'] ?? 0);
     $paymentMethod = $_POST['payment_method'] ?? 'VISA / Master';
 
-    // Verify Plan exists
+    
     $pStmt = $db->prepare("SELECT * FROM `SUBSCRIPTION_PLAN` WHERE Plan_ID = ? AND Status = 'ACTIVE' AND Target_Role IN ('CLIENT', 'ALL')");
     $pStmt->execute([$planId]);
     $plan = $pStmt->fetch();
 
     if ($plan) {
-        // Generate authentic Sri Lankan Payment Reference Number
+        
         $refNo = 'PAY-LKR-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
         
         $success = subscribeUser($userId, $planId, $refNo);
@@ -45,14 +43,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch current active plan & quota
+
 $activeSub = getUserActiveSubscription($userId);
 $quota = getMonthlyBookingQuota($clientId, $userId);
 
-// Fetch all available client plans
+
 $availablePlans = $db->query("SELECT * FROM `SUBSCRIPTION_PLAN` WHERE Status = 'ACTIVE' AND Target_Role IN ('CLIENT', 'ALL') ORDER BY Price ASC")->fetchAll();
 
-// Fetch subscription history
+
 $histStmt = $db->prepare("
     SELECT us.*, sp.Plan_Name, sp.Price, sp.Max_Book_per_Month, sp.Search_Radius_KM
     FROM `USER_SUBSCRIPTION` us
@@ -68,161 +66,107 @@ $preselectedPlanId = (int)($_GET['plan_id'] ?? 0);
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<style>
+  .sub-page{max-width:1180px}.sub-hero{padding:1.1rem 0 .35rem}.sub-card{border:1px solid #e7ecef;border-radius:18px;background:#fff;box-shadow:0 8px 28px rgba(18,55,62,.055)}
+  .sub-status{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .65rem;border-radius:999px;font-size:.75rem;font-weight:700}.sub-status.active{background:#e9f8f3;color:#087f78}.sub-status.inactive{background:#fff4df;color:#8a5a00}
+  .metric{padding:.85rem;border:1px solid #edf1f2;border-radius:14px;background:#fbfcfc}.metric-label{font-size:.76rem;color:#6c757d;margin-bottom:.2rem}.metric-value{font-weight:700}
+  .quota-track{height:9px;border-radius:99px;background:#edf2f3;overflow:hidden}.quota-fill{height:100%;border-radius:99px;background:var(--primary-teal,#087f78)}
+  .plan-option{border:1px solid #e7ecef;border-radius:16px;padding:1rem;height:100%;transition:.18s ease}.plan-option:hover{border-color:#b8d8d4;transform:translateY(-2px)}.plan-option.current{border-color:#87c9c1;background:#f6fbfa}
+  .history-item{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(130px,.9fr) minmax(160px,1.1fr) auto;gap:1rem;align-items:center;padding:1rem 0;border-bottom:1px solid #edf1f2}.history-item:last-child{border-bottom:0}
+  .ref-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;color:#536168;word-break:break-all}
+  @media(max-width:767.98px){.history-item{grid-template-columns:1fr;gap:.35rem}.sub-card{border-radius:15px}}
+</style>
+
+<div class="container sub-page py-4 py-lg-5">
+  <div class="sub-hero d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
     <div>
-      <h2 class="fw-bold mb-1"><i class="bi bi-credit-card-2-front text-teal me-2"></i> Client Subscription & Quotas</h2>
-      <p class="text-muted small mb-0">Manage your medical discovery membership and track your monthly appointment allowance.</p>
+      <div class="text-uppercase small fw-bold text-teal mb-2" style="letter-spacing:.08em"><i class="bi bi-wallet2 me-1"></i> Membership</div>
+      <h1 class="h2 fw-bold mb-2">Subscription & booking quota</h1>
+      <p class="text-muted mb-0">See your current plan, monthly booking allowance and subscription history in one place.</p>
     </div>
-    <a href="<?= url('client/dashboard.php') ?>" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
-    </a>
+    <a href="<?= url('client/dashboard.php') ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
   </div>
 
-  <!-- Active Subscription Overview Banner -->
   <div class="row g-4 mb-4">
-    <div class="col-lg-8">
-      <div class="card card-custom p-4 h-100 <?= $activeSub ? 'border-success' : 'border-warning' ?>">
-        <div class="d-flex justify-content-between align-items-start mb-3">
+    <div class="col-lg-7">
+      <section class="sub-card p-4 h-100">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
           <div>
-            <span class="badge <?= $activeSub ? 'bg-success' : 'bg-warning text-dark' ?> mb-2">
-              <?= $activeSub ? 'ACTIVE MEMBERSHIP' : 'NO ACTIVE SUBSCRIPTION' ?>
-            </span>
-            <h3 class="fw-bold mb-0 text-teal"><?= e($activeSub ? $activeSub['Plan_Name'] : 'Subscription Required') ?></h3>
+            <span class="sub-status <?= $activeSub ? 'active' : 'inactive' ?> mb-2"><i class="bi <?= $activeSub ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill' ?>"></i><?= $activeSub ? 'Active plan' : 'No active plan' ?></span>
+            <h2 class="h4 fw-bold mb-1"><?= e($activeSub ? $activeSub['Plan_Name'] : 'Choose a plan to start booking') ?></h2>
+            <?php if ($activeSub && !empty($activeSub['Plan_Description'])): ?><p class="text-muted small mb-0"><?= e($activeSub['Plan_Description']) ?></p><?php endif; ?>
           </div>
-          <?php if ($activeSub): ?>
-            <span class="badge bg-light text-dark border p-2">
-              <i class="bi bi-clock-history me-1"></i> <?= $activeSub['Days_Remaining'] ?> Days Remaining
-            </span>
-          <?php endif; ?>
+          <?php if ($activeSub): ?><div class="text-md-end"><div class="small text-muted">Time remaining</div><div class="fw-bold"><i class="bi bi-calendar-check me-1 text-teal"></i><?= (int)$activeSub['Days_Remaining'] ?> days</div></div><?php endif; ?>
         </div>
 
         <?php if ($activeSub): ?>
-          <p class="text-secondary small mb-3"><?= e($activeSub['Plan_Description']) ?></p>
-          <div class="row g-3 text-center mb-3">
-            <div class="col-4">
-              <div class="bg-light p-2 rounded-3 border">
-                <div class="small text-muted">Annual Price</div>
-                <div class="fw-bold text-dark"><?= formatLKR($activeSub['Price']) ?>/yr</div>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="bg-light p-2 rounded-3 border">
-                <div class="small text-muted">Search Radius</div>
-                <div class="fw-bold text-teal"><?= $activeSub['Search_Radius_KM'] ?> km</div>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="bg-light p-2 rounded-3 border">
-                <div class="small text-muted">Valid Until</div>
-                <div class="fw-bold text-dark"><?= formatDate($activeSub['End_Date']) ?></div>
-              </div>
-            </div>
+          <div class="row g-3 mb-4">
+            <div class="col-sm-4"><div class="metric"><div class="metric-label">Plan price</div><div class="metric-value"><?= formatLKR($activeSub['Price']) ?></div></div></div>
+            <div class="col-sm-4"><div class="metric"><div class="metric-label">Search radius</div><div class="metric-value"><?= (int)$activeSub['Search_Radius_KM'] ?> km</div></div></div>
+            <div class="col-sm-4"><div class="metric"><div class="metric-label">Valid until</div><div class="metric-value"><?= formatDate($activeSub['End_Date']) ?></div></div></div>
           </div>
         <?php else: ?>
-          <div class="alert alert-warning small mb-3">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            You do not currently have an active subscription. You cannot book doctor appointments or use expanded distance search until you subscribe to a plan below.
-          </div>
+          <div class="alert alert-warning border-0 rounded-3 small mb-4"><i class="bi bi-info-circle me-2"></i>An active plan is required for appointment booking and plan-based search radius access.</div>
         <?php endif; ?>
 
-        <!-- Monthly Quota Progress -->
-        <div class="mt-2 pt-3 border-top">
-          <div class="d-flex justify-content-between align-items-center mb-1 small fw-semibold">
-            <span>Monthly Booking Quota Usage (<?= date('F Y') ?>):</span>
-            <span class="text-teal"><?= $quota['used'] ?> of <?= $quota['limit'] ?> used (<?= $quota['remaining'] ?> remaining)</span>
-          </div>
-          <div class="progress quota-progress mb-2">
-            <?php 
-              $pct = ($quota['limit'] > 0) ? min(100, round(($quota['used'] / $quota['limit']) * 100)) : 0; 
-              $barColor = ($pct >= 90) ? 'bg-danger' : (($pct >= 70) ? 'bg-warning' : 'bg-teal');
-            ?>
-            <div class="progress-bar <?= $barColor ?>" role="progressbar" style="width: <?= $pct ?>%;" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100"></div>
-          </div>
-          <small class="text-muted" style="font-size: 0.78rem;"><i class="bi bi-info-circle"></i> Quota automatically refreshes on the 1st day of every month. Cancelled appointments are not deducted.</small>
-        </div>
-      </div>
+        <?php $pct = ($quota['limit'] > 0) ? min(100, round(($quota['used'] / $quota['limit']) * 100)) : 0; ?>
+        <div class="d-flex justify-content-between gap-3 mb-2"><div><div class="fw-semibold">Booking quota</div><div class="small text-muted"><?= date('F Y') ?></div></div><div class="text-end"><strong><?= (int)$quota['remaining'] ?></strong> <span class="text-muted small">remaining</span><div class="small text-muted"><?= (int)$quota['used'] ?> / <?= (int)$quota['limit'] ?> used</div></div></div>
+        <div class="quota-track mb-2" role="progressbar" aria-label="Monthly booking quota" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100"><div class="quota-fill" style="width:<?= $pct ?>%"></div></div>
+        <div class="small text-muted"><i class="bi bi-arrow-repeat me-1"></i>Monthly quota refreshes on the first day of each month. Cancelled appointments are not deducted.</div>
+      </section>
     </div>
 
-    <!-- Quick Upgrade / Renew Card -->
-    <div class="col-lg-4">
-      <div class="card card-custom p-4 bg-light h-100 border-0">
-        <h5 class="fw-bold mb-3"><i class="bi bi-shield-lock-fill text-teal me-2"></i> Secure Membership Checkout</h5>
-        <p class="small text-muted mb-3">
-          Select your preferred membership tier and payment method to activate or renew your MediLink patient subscription.
-        </p>
-
-        <form method="POST" action="<?= url('client/subscription.php') ?>" id="subscribeForm">
-          <?= CSRF::inputField() ?>
-          <input type="hidden" name="action" value="subscribe">
-
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Choose Tier</label>
-            <select name="plan_id" id="planSelect" class="form-select" required>
-              <?php foreach ($availablePlans as $p): ?>
-                <option value="<?= $p['Plan_ID'] ?>" <?= ($preselectedPlanId === $p['Plan_ID'] || ($activeSub && $activeSub['Plan_ID'] === $p['Plan_ID'])) ? 'selected' : '' ?>>
-                  <?= e($p['Plan_Name']) ?> — <?= formatLKR($p['Price']) ?>/year (<?= $p['Max_Book_per_Month'] ?> appts/mo, <?= $p['Search_Radius_KM'] ?> km)
-                </option>
-              <?php endforeach; ?>
+    <div class="col-lg-5">
+      <section class="sub-card p-4 h-100">
+        <div class="d-flex align-items-center gap-2 mb-2"><span class="rounded-circle bg-light p-2 text-teal"><i class="bi bi-arrow-up-right-circle"></i></span><h2 class="h5 fw-bold mb-0"><?= $activeSub ? 'Change or renew plan' : 'Activate a plan' ?></h2></div>
+        <p class="small text-muted mb-4">Select a client plan below. This project uses a demo subscription activation flow.</p>
+        <?php if (empty($availablePlans)): ?>
+          <div class="alert alert-light border mb-0">No active client plans are available right now.</div>
+        <?php else: ?>
+          <form method="POST" action="<?= url('client/subscription.php') ?>">
+            <?= CSRF::inputField() ?><input type="hidden" name="action" value="subscribe">
+            <label class="form-label small fw-semibold" for="planSelect">Plan</label>
+            <select name="plan_id" id="planSelect" class="form-select mb-3" required>
+              <?php foreach ($availablePlans as $p): ?><option value="<?= (int)$p['Plan_ID'] ?>" <?= ($preselectedPlanId === (int)$p['Plan_ID'] || ($activeSub && (int)$activeSub['Plan_ID'] === (int)$p['Plan_ID'])) ? 'selected' : '' ?>><?= e($p['Plan_Name']) ?> — <?= formatLKR($p['Price']) ?> · <?= (int)$p['Max_Book_per_Month'] ?> bookings · <?= (int)$p['Search_Radius_KM'] ?> km</option><?php endforeach; ?>
             </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label small fw-semibold">Payment Method</label>
-            <select name="payment_method" class="form-select">
-              <option value="Credit / Debit Card (VISA / MasterCard / Amex)">Credit / Debit Card (VISA / MasterCard / Amex)</option>
-              <option value="Commercial Bank IPG">Commercial Bank e-Gateway (IPG)</option>
-              <option value="Sampath Vishwa Direct">Sampath Vishwa Direct Pay</option>
-              <option value="HNB PayFast">HNB PayFast Mobile</option>
-              <option value="Seylan Merchant Pay">Seylan Merchant Pay</option>
-            </select>
-          </div>
-
-          <button type="submit" class="btn btn-teal w-100 py-2 fw-semibold">
-            <i class="bi bi-check2-circle me-1"></i> Confirm & Activate Plan
-          </button>
-        </form>
-      </div>
+            <input type="hidden" name="payment_method" value="Demo activation">
+            <button type="submit" class="btn btn-teal w-100 py-2 fw-semibold"><i class="bi bi-check2-circle me-1"></i><?= $activeSub ? 'Confirm plan selection' : 'Activate selected plan' ?></button>
+            <div class="small text-muted mt-3"><i class="bi bi-shield-check me-1"></i>Medical consultation fees are separate from MediLink subscription pricing.</div>
+          </form>
+        <?php endif; ?>
+      </section>
     </div>
   </div>
 
-  <!-- Subscription History Table -->
-  <div class="card card-custom p-4">
-    <h5 class="fw-bold mb-3"><i class="bi bi-receipt text-teal me-2"></i> Subscription Billing History</h5>
+  <section class="mb-4">
+    <div class="d-flex justify-content-between align-items-end gap-3 mb-3"><div><h2 class="h4 fw-bold mb-1">Available client plans</h2><p class="text-muted small mb-0">Compare the limits that affect doctor discovery and booking.</p></div><a href="<?= url('plans.php#client-plans') ?>" class="small fw-semibold text-decoration-none">Full comparison <i class="bi bi-arrow-right"></i></a></div>
+    <div class="row g-3">
+      <?php foreach ($availablePlans as $p): $isCurrent=$activeSub && (int)$activeSub['Plan_ID']===(int)$p['Plan_ID']; ?>
+        <div class="col-md-6 col-xl-4"><div class="plan-option <?= $isCurrent ? 'current' : '' ?>">
+          <div class="d-flex justify-content-between gap-2 mb-2"><h3 class="h6 fw-bold mb-0"><?= e($p['Plan_Name']) ?></h3><?php if($isCurrent): ?><span class="badge bg-success-subtle text-success border border-success-subtle">Current</span><?php endif; ?></div>
+          <div class="h5 fw-bold mb-3"><?= formatLKR($p['Price']) ?></div>
+          <div class="small mb-2"><i class="bi bi-calendar2-check text-teal me-2"></i><strong><?= (int)$p['Max_Book_per_Month'] ?></strong> bookings / month</div>
+          <div class="small"><i class="bi bi-geo-alt text-teal me-2"></i><strong><?= (int)$p['Search_Radius_KM'] ?> km</strong> search radius</div>
+        </div></div>
+      <?php endforeach; ?>
+    </div>
+  </section>
 
+  <section class="sub-card p-4">
+    <div class="d-flex justify-content-between align-items-center gap-3 mb-3"><div><h2 class="h5 fw-bold mb-1"><i class="bi bi-clock-history text-teal me-2"></i>Subscription history</h2><p class="small text-muted mb-0">Previous activations and renewals linked to your account.</p></div><span class="badge bg-light text-dark border"><?= count($history) ?> record<?= count($history)===1?'':'s' ?></span></div>
     <?php if (empty($history)): ?>
-      <p class="text-muted small mb-0">No past subscription records found.</p>
+      <div class="text-center py-4"><i class="bi bi-receipt fs-2 text-muted"></i><h3 class="h6 fw-bold mt-2">No subscription history yet</h3><p class="small text-muted mb-0">Your plan activations will appear here.</p></div>
     <?php else: ?>
-      <div class="table-responsive">
-        <table class="table table-custom table-hover align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Reference No</th>
-              <th>Plan</th>
-              <th>Price (LKR)</th>
-              <th>Period</th>
-              <th>Quota & Radius</th>
-              <th>Status</th>
-              <th>Purchased On</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($history as $h): ?>
-              <tr>
-                <td><code class="fw-bold text-dark"><?= e($h['Payment_Reference_No']) ?></code></td>
-                <td><strong><?= e($h['Plan_Name']) ?></strong></td>
-                <td><?= formatLKR($h['Price']) ?></td>
-                <td><small><?= formatDate($h['Start_Date']) ?> – <?= formatDate($h['End_Date']) ?></small></td>
-                <td><small><?= $h['Max_Book_per_Month'] ?> appts • <?= $h['Search_Radius_KM'] ?> km</small></td>
-                <td><?= renderStatusBadge($h['Status']) ?></td>
-                <td><small class="text-muted"><?= formatDateTime($h['Created_At']) ?></small></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
+      <?php foreach ($history as $h): ?>
+        <div class="history-item">
+          <div><div class="fw-semibold"><?= e($h['Plan_Name']) ?></div><div class="ref-code"><?= e($h['Payment_Reference_No']) ?></div></div>
+          <div><div class="fw-semibold"><?= formatLKR($h['Price']) ?></div><div class="small text-muted"><?= (int)$h['Max_Book_per_Month'] ?> bookings · <?= (int)$h['Search_Radius_KM'] ?> km</div></div>
+          <div><div class="small fw-semibold"><?= formatDate($h['Start_Date']) ?> → <?= formatDate($h['End_Date']) ?></div><div class="small text-muted">Activated <?= formatDateTime($h['Created_At']) ?></div></div>
+          <div><?= renderStatusBadge($h['Status']) ?></div>
+        </div>
+      <?php endforeach; ?>
     <?php endif; ?>
-  </div>
+  </section>
 </div>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

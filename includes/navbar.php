@@ -1,7 +1,5 @@
 <?php
-/**
- * Navigation Bar Component
- */
+
 
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/auth.php';
@@ -11,137 +9,103 @@ $user = getCurrentUser();
 $isClient = ($user && $user['role'] === ROLE_CLIENT);
 $isProvider = ($user && $user['role'] === ROLE_PROVIDER);
 $isAdmin = ($user && $user['role'] === ROLE_ADMIN);
+$isOwner = ($user && $user['role'] === ROLE_OWNER);
 
 $subDetails = null;
 if ($user && ($isClient || $isProvider)) {
     $subDetails = getUserActiveSubscription($user['user_id']);
 }
+
+$currentPath = str_replace('\\', '/', $_SERVER['PHP_SELF'] ?? '');
+function mlNavActive(string $path): string {
+    global $currentPath;
+    return str_ends_with($currentPath, $path) ? ' active' : '';
+}
 ?>
-<nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
+<nav class="navbar navbar-expand-lg navbar-light ml-navbar" aria-label="Main navigation">
   <div class="container">
-    <a class="navbar-brand d-flex align-items-center" href="<?= url('public/index.php') ?>">
-      <span class="brand-icon"><i class="bi bi-hospital"></i></span>
-      <span><?= APP_NAME ?></span>
+    <a class="navbar-brand ml-navbar-brand" href="<?= url('public/index.php') ?>" aria-label="MediLink Sri Lanka home">
+      <span class="ml-brand-mark"><i class="bi bi-heart-pulse-fill"></i></span>
+      <span class="ml-brand-copy"><strong><?= APP_NAME ?></strong><small>Sri Lanka</small></span>
     </a>
-    
-    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
+
+    <button class="navbar-toggler ml-navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+      <i class="bi bi-list"></i>
     </button>
 
     <div class="collapse navbar-collapse" id="mainNavbar">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link" href="<?= url('public/index.php') ?>"><i class="bi bi-house-door me-1"></i> Home</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="<?= url('public/plans.php') ?>"><i class="bi bi-gem me-1"></i> Plans & Pricing</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="<?= url('public/about.php') ?>"><i class="bi bi-info-circle me-1"></i> About & FAQ</a>
-        </li>
-
-        <?php if ($isClient): ?>
-          <li class="nav-item">
-            <a class="nav-link" href="<?= url('client/search.php') ?>"><i class="bi bi-search me-1"></i> Find Doctors</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="<?= url('client/appointments.php') ?>"><i class="bi bi-calendar-check me-1"></i> My Appointments</a>
-          </li>
-        <?php endif; ?>
-
-        <?php if ($isProvider): ?>
-          <li class="nav-item">
-            <a class="nav-link" href="<?= url('provider/slots.php') ?>"><i class="bi bi-calendar-plus me-1"></i> Manage Slots</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="<?= url('provider/appointments.php') ?>"><i class="bi bi-calendar2-range me-1"></i> Appointments</a>
-          </li>
+      <ul class="navbar-nav ml-nav-links mx-lg-auto">
+        <?php if (!$user): ?>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/public/index.php') ?>" href="<?= url('public/index.php') ?>"><i class="bi bi-house"></i><span>Home</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/public/plans.php') ?>" href="<?= url('public/plans.php') ?>"><i class="bi bi-grid"></i><span>Plans</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/public/about.php') ?>" href="<?= url('public/about.php') ?>"><i class="bi bi-info-circle"></i><span>About</span></a></li>
+        <?php elseif ($isClient): ?>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/client/dashboard.php') ?>" href="<?= url('client/dashboard.php') ?>"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/client/search.php') ?>" href="<?= url('client/search.php') ?>"><i class="bi bi-search"></i><span>Find Doctors</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/client/appointments.php') ?>" href="<?= url('client/appointments.php') ?>"><i class="bi bi-calendar-check"></i><span>Appointments</span></a></li>
+        <?php elseif ($isProvider): ?>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/provider/dashboard.php') ?>" href="<?= url('provider/dashboard.php') ?>"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/provider/slots.php') ?>" href="<?= url('provider/slots.php') ?>"><i class="bi bi-calendar3"></i><span>Slots</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/provider/appointments.php') ?>" href="<?= url('provider/appointments.php') ?>"><i class="bi bi-calendar-check"></i><span>Appointments</span></a></li>
           <?php if (($user['provider_type'] ?? '') === PROVIDER_CENTRE): ?>
-            <li class="nav-item">
-              <a class="nav-link" href="<?= url('provider/doctors.php') ?>"><i class="bi bi-people me-1"></i> Affiliated Doctors</a>
-            </li>
+            <li class="nav-item"><a class="nav-link<?= mlNavActive('/provider/doctors.php') ?>" href="<?= url('provider/doctors.php') ?>"><i class="bi bi-people"></i><span>Doctors</span></a></li>
           <?php endif; ?>
-        <?php endif; ?>
-
-        <?php if ($isAdmin): ?>
+        <?php elseif ($isOwner): ?>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/owner/dashboard.php') ?>" href="<?= url('owner/dashboard.php') ?>"><i class="bi bi-speedometer2"></i><span>Owner Dashboard</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/owner/admins.php') ?>" href="<?= url('owner/admins.php') ?>"><i class="bi bi-person-gear"></i><span>System Admins</span></a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= url('admin/reports.php') ?>"><i class="bi bi-bar-chart"></i><span>Reports</span></a></li>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/owner/audit.php') ?>" href="<?= url('owner/audit.php') ?>"><i class="bi bi-journal-check"></i><span>Audit</span></a></li>
+        <?php elseif ($isAdmin): ?>
+          <li class="nav-item"><a class="nav-link<?= mlNavActive('/admin/dashboard.php') ?>" href="<?= url('admin/dashboard.php') ?>"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-              <i class="bi bi-speedometer2 me-1"></i> Admin Management
-            </a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="<?= url('admin/dashboard.php') ?>"><i class="bi bi-graph-up me-2"></i> Dashboard Overview</a></li>
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-sliders"></i><span>Manage</span></a>
+            <ul class="dropdown-menu ml-nav-menu">
+              <li><a class="dropdown-item" href="<?= url('admin/users.php') ?>"><i class="bi bi-people"></i> Users</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/providers.php') ?>"><i class="bi bi-patch-check"></i> Providers</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/appointments.php') ?>"><i class="bi bi-calendar-range"></i> Appointments</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/subscriptions.php') ?>"><i class="bi bi-receipt"></i> Subscriptions</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/plans.php') ?>"><i class="bi bi-tags"></i> Plans</a></li>
               <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="<?= url('admin/users.php') ?>"><i class="bi bi-people me-2"></i> Manage Users</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/providers.php') ?>"><i class="bi bi-patch-check me-2"></i> Provider Verifications</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/appointments.php') ?>"><i class="bi bi-calendar-range me-2"></i> Manage Appointments</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/subscriptions.php') ?>"><i class="bi bi-receipt me-2"></i> Subscription Ledger</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/plans.php') ?>"><i class="bi bi-tags me-2"></i> Subscription Plans</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/specializations.php') ?>"><i class="bi bi-heart-pulse me-2"></i> Specializations</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/cities.php') ?>"><i class="bi bi-geo-alt me-2"></i> Manage Cities</a></li>
-              <li><a class="dropdown-item" href="<?= url('admin/reports.php') ?>"><i class="bi bi-file-earmark-bar-graph me-2"></i> System Reports</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/database.php') ?>"><i class="bi bi-database"></i> Database</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/specializations.php') ?>"><i class="bi bi-heart-pulse"></i> Specializations</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/cities.php') ?>"><i class="bi bi-geo-alt"></i> Cities</a></li>
+              <li><a class="dropdown-item" href="<?= url('admin/reports.php') ?>"><i class="bi bi-bar-chart"></i> Reports</a></li>
             </ul>
           </li>
         <?php endif; ?>
       </ul>
 
-      <!-- Right Side Actions & User Profile -->
-      <div class="d-flex align-items-center gap-2">
-        <?php if ($user): ?>
-          <!-- Subscription Badge for Client/Provider -->
-          <?php if ($isClient || $isProvider): ?>
-            <?php if ($subDetails): ?>
-              <span class="badge bg-success d-none d-md-inline-block py-2 px-3">
-                <i class="bi bi-patch-check-fill me-1"></i> <?= e($subDetails['Plan_Name']) ?>
-              </span>
-            <?php else: ?>
-              <a href="<?= url(($isClient ? 'client' : 'provider') . '/subscription.php') ?>" class="badge bg-warning text-dark text-decoration-none py-2 px-3">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i> Expired - Renew Now
-              </a>
-            <?php endif; ?>
-          <?php elseif ($isAdmin): ?>
-            <span class="badge bg-danger py-2 px-3">
-              <i class="bi bi-shield-lock-fill me-1"></i> Admin Superuser
-            </span>
+      <div class="ml-nav-actions">
+        <?php if (!$user): ?>
+          <a href="<?= url('public/login.php') ?>" class="btn ml-btn-login"><i class="bi bi-person"></i><span>Sign in</span></a>
+          <a href="<?= url('client/search.php') ?>" class="btn ml-btn-primary"><i class="bi bi-search"></i><span>Find Doctors</span></a>
+        <?php else: ?>
+          <?php if (($isClient || $isProvider) && !$subDetails): ?>
+            <a href="<?= url(($isClient ? 'client' : 'provider') . '/subscription.php') ?>" class="ml-nav-alert" title="Subscription needs attention"><i class="bi bi-exclamation-circle"></i></a>
           <?php endif; ?>
-
-          <!-- User Profile Dropdown -->
           <div class="dropdown">
-            <button class="btn btn-light btn-sm dropdown-toggle rounded-pill px-3 py-2 fw-semibold d-flex align-items-center" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-person-circle fs-6 me-2 text-primary"></i>
-              <span><?= e($user['full_name']) ?></span>
+            <button class="btn ml-profile-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="ml-avatar"><i class="bi bi-person"></i></span>
+              <span class="ml-profile-copy"><strong><?= e($user['full_name']) ?></strong><small><?= e(ucfirst($user['role'])) ?></small></span>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
-              <li class="dropdown-header text-muted">
-                <small>Signed in as <strong><?= e($user['role']) ?></strong></small><br>
-                <small class="text-truncate d-block" style="max-width: 180px;"><?= e($user['email']) ?></small>
-              </li>
-              <li><hr class="dropdown-divider"></li>
-              
+            <ul class="dropdown-menu dropdown-menu-end ml-nav-menu">
               <?php if ($isClient): ?>
-                <li><a class="dropdown-item" href="<?= url('client/dashboard.php') ?>"><i class="bi bi-columns-gap me-2"></i> Client Dashboard</a></li>
-                <li><a class="dropdown-item" href="<?= url('client/profile.php') ?>"><i class="bi bi-person-gear me-2"></i> Edit Profile</a></li>
-                <li><a class="dropdown-item" href="<?= url('client/subscription.php') ?>"><i class="bi bi-credit-card me-2"></i> My Subscription</a></li>
+                <li><a class="dropdown-item" href="<?= url('client/profile.php') ?>"><i class="bi bi-person-gear"></i> Profile</a></li>
+                <li><a class="dropdown-item" href="<?= url('client/subscription.php') ?>"><i class="bi bi-credit-card"></i> Subscription</a></li>
               <?php elseif ($isProvider): ?>
-                <li><a class="dropdown-item" href="<?= url('provider/dashboard.php') ?>"><i class="bi bi-columns-gap me-2"></i> Provider Dashboard</a></li>
-                <li><a class="dropdown-item" href="<?= url('provider/profile.php') ?>"><i class="bi bi-building-gear me-2"></i> Provider Profile</a></li>
-                <li><a class="dropdown-item" href="<?= url('provider/subscription.php') ?>"><i class="bi bi-credit-card me-2"></i> Subscription Status</a></li>
+                <li><a class="dropdown-item" href="<?= url('provider/profile.php') ?>"><i class="bi bi-building-gear"></i> Profile</a></li>
+                <li><a class="dropdown-item" href="<?= url('provider/subscription.php') ?>"><i class="bi bi-credit-card"></i> Subscription</a></li>
+              <?php elseif ($isOwner): ?>
+                <li><a class="dropdown-item" href="<?= url('owner/dashboard.php') ?>"><i class="bi bi-speedometer2"></i> Owner dashboard</a></li>
+                <li><a class="dropdown-item" href="<?= url('owner/profile.php') ?>"><i class="bi bi-person-gear"></i> Owner profile</a></li>
+                <li><a class="dropdown-item" href="<?= url('owner/admins.php') ?>"><i class="bi bi-person-gear"></i> Manage admins</a></li>
               <?php elseif ($isAdmin): ?>
-                <li><a class="dropdown-item" href="<?= url('admin/dashboard.php') ?>"><i class="bi bi-speedometer2 me-2"></i> Admin Panel</a></li>
+                <li><a class="dropdown-item" href="<?= url('admin/dashboard.php') ?>"><i class="bi bi-shield-check"></i> Admin panel</a></li>
               <?php endif; ?>
-
               <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item text-danger" href="<?= url('public/logout.php') ?>"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
+              <li><a class="dropdown-item text-danger" href="<?= url('public/logout.php') ?>"><i class="bi bi-box-arrow-right"></i> Sign out</a></li>
             </ul>
           </div>
-
-        <?php else: ?>
-          <!-- Guest Navigation -->
-          <a href="<?= url('public/login.php') ?>" class="btn btn-outline-light btn-sm px-3">
-            <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
-          </a>
-          <a href="<?= url('public/register.php') ?>" class="btn btn-light btn-sm px-3 fw-semibold text-teal">
-            <i class="bi bi-person-plus me-1"></i> Register
-          </a>
         <?php endif; ?>
       </div>
     </div>

@@ -1,7 +1,5 @@
 <?php
-/**
- * Header Template
- */
+
 
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/functions.php';
@@ -34,14 +32,14 @@ $currentUser = getCurrentUser();
 <body>
 <?php require_once __DIR__ . '/navbar.php'; ?>
 
-<!-- Flash Messages Toast / Alert Area -->
-<div class="container mt-3">
+<!-- Flash Messages / Toast Area -->
+<div class="ml-toast-stack" aria-live="polite" aria-atomic="true">
     <?php if (hasFlash()): ?>
         <?php foreach (getFlash() as $flash): ?>
-            <div class="alert alert-<?= e($flash['type']) ?> alert-dismissible fade show shadow-sm" role="alert">
+            <div class="ml-toast is-<?= e($flash['type']) ?> d-flex align-items-start gap-2" role="alert" data-ml-toast>
                 <i class="bi bi-info-circle-fill me-2"></i>
-                <?= $flash['message'] // Safe HTML allowed if constructed properly ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <?= $flash['message'] ?>
+                <button type="button" class="btn-close ms-auto" aria-label="Close" data-ml-toast-close></button>
             </div>
         <?php endforeach; ?>
     <?php endif; ?>

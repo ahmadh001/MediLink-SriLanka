@@ -1,19 +1,14 @@
 <?php
-/**
- * Subscription & Quota Validation Engine
- */
+
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/auth.php';
 
-/**
- * Check if a user has an active subscription.
- * Note: System administrators bypass subscription restrictions.
- */
+
 function hasActiveSubscription(?int $userId): bool {
     if (!$userId) return false;
 
-    // Admin bypasses all subscription restrictions
+    
     $user = getCurrentUser();
     if ($user && $user['user_id'] === $userId && $user['role'] === ROLE_ADMIN) {
         return true;
@@ -36,9 +31,7 @@ function hasActiveSubscription(?int $userId): bool {
     return !empty($sub);
 }
 
-/**
- * Get active subscription details for a user
- */
+
 function getUserActiveSubscription(?int $userId): ?array {
     if (!$userId) return null;
 
@@ -79,9 +72,24 @@ function getUserActiveSubscription(?int $userId): ?array {
     return $sub ?: null;
 }
 
-/**
- * Get client monthly booking quota usage
- */
+
+
+function getProviderPlanTier(?int $userId): string {
+    $sub = getUserActiveSubscription($userId);
+    if (!$sub) return 'NONE';
+    $name = strtoupper((string)($sub['Plan_Name'] ?? ''));
+    if (str_contains($name, 'PREMIUM')) return 'PREMIUM';
+    if (str_contains($name, 'PROFESSIONAL')) return 'PROFESSIONAL';
+    if (str_contains($name, 'STARTER')) return 'STARTER';
+    return 'PROFESSIONAL';
+}
+function providerPlanAllows(?int $userId, string $feature): bool {
+    $tier=getProviderPlanTier($userId);
+    $rank=['NONE'=>0,'STARTER'=>1,'PROFESSIONAL'=>2,'PREMIUM'=>3];
+    $min=['single_slots'=>1,'appointment_management'=>1,'batch_slots'=>2,'recurring_slots'=>2,'advanced_analytics'=>2,'priority_listing'=>3,'priority_support'=>3];
+    return ($rank[$tier]??0) >= ($min[$feature]??99);
+}
+
 function getMonthlyBookingQuota(int $clientId, ?int $userId = null): array {
     $db = Database::getConnection();
 
@@ -95,12 +103,12 @@ function getMonthlyBookingQuota(int $clientId, ?int $userId = null): array {
     $activeSub = getUserActiveSubscription($userId);
     $maxLimit = $activeSub ? (int)$activeSub['Max_Book_per_Month'] : 0;
 
-    // Count non-cancelled appointments booked in the current calendar month
+    
     $qStmt = $db->prepare("
         SELECT COUNT(*) AS used_count
         FROM `APPOINTMENT`
         WHERE Client_ID = ?
-          AND Status != 'CANCELLED'
+          AND Status NOT IN ('CANCELLED', 'REJECTED')
           AND MONTH(Booking_DateTime) = MONTH(CURRENT_DATE())
           AND YEAR(Booking_DateTime) = YEAR(CURRENT_DATE())
     ");
@@ -122,22 +130,18 @@ function getMonthlyBookingQuota(int $clientId, ?int $userId = null): array {
     ];
 }
 
-/**
- * Retrieve allowed Search Radius in KM for a user
- */
+
 function getSearchRadiusKM(?int $userId): int {
-    if (!$userId) return 5; // Default free radius if not logged in
+    if (!$userId) return 5; 
     $sub = getUserActiveSubscription($userId);
     return $sub ? (int)$sub['Search_Radius_KM'] : 5;
 }
 
-/**
- * Subscribe or Renew user plan with payment reference
- */
+
 function subscribeUser(int $userId, int $planId, string $paymentRef): bool {
     $db = Database::getConnection();
 
-    // Fetch plan details
+    
     $pStmt = $db->prepare("SELECT * FROM `SUBSCRIPTION_PLAN` WHERE Plan_ID = ? AND Status = 'ACTIVE'");
     $pStmt->execute([$planId]);
     $plan = $pStmt->fetch();
@@ -149,7 +153,7 @@ function subscribeUser(int $userId, int $planId, string $paymentRef): bool {
 
     $db->beginTransaction();
     try {
-        // Mark any previous active subscriptions as EXPIRED
+        
         $expireStmt = $db->prepare("
             UPDATE `USER_SUBSCRIPTION` 
             SET Status = 'EXPIRED' 
@@ -157,7 +161,7 @@ function subscribeUser(int $userId, int $planId, string $paymentRef): bool {
         ");
         $expireStmt->execute([$userId]);
 
-        // Insert new active subscription
+        
         $insStmt = $db->prepare("
             INSERT INTO `USER_SUBSCRIPTION` (User_ID, Plan_ID, Start_Date, End_Date, Status, Payment_Reference_No)
             VALUES (?, ?, ?, ?, 'ACTIVE', ?)

@@ -1,7 +1,5 @@
 <?php
-/**
- * Cross-Site Request Forgery (CSRF) Protection
- */
+
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
