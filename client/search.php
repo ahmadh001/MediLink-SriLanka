@@ -183,14 +183,18 @@ $params = [
 if ($searchTerm !== '') {
     $sql .= "
         AND (
-            p.Business_Name LIKE :search
-            OR u.First_Name LIKE :search
-            OR u.Last_Name LIKE :search
-            OR hc.Centre_Name LIKE :search
+            p.Business_Name LIKE :search1
+            OR u.First_Name LIKE :search2
+            OR u.Last_Name LIKE :search3
+            OR hc.Centre_Name LIKE :search4
         )
     ";
 
-    $params[':search'] = '%' . $searchTerm . '%';
+    $searchParam = '%' . $searchTerm . '%';
+    $params[':search1'] = $searchParam;
+    $params[':search2'] = $searchParam;
+    $params[':search3'] = $searchParam;
+    $params[':search4'] = $searchParam;
 }
 
 if ($cityFilter !== '') {
