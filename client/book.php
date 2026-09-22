@@ -84,11 +84,14 @@ try {
         setFlash('danger',$msg); redirect('client/search.php');
     }
 
-    $providerQuotaStmt=$db->prepare("SELECT sp.Max_Book_per_Month FROM `PROVIDER` p JOIN `USER_SUBSCRIPTION` us ON us.User_ID=p.User_ID JOIN `SUBSCRIPTION_PLAN` sp ON sp.Plan_ID=us.Plan_ID WHERE p.Provider_ID=? AND us.Status='ACTIVE' AND CURRENT_DATE BETWEEN us.Start_Date AND us.End_Date AND sp.Status='ACTIVE' AND sp.Target_Role IN ('PROVIDER','ALL') ORDER BY us.End_Date DESC LIMIT 1");
+    $providerQuotaStmt=$db->prepare("SELECT sp.Max_Book_per_Month, us.Created_At, us.Start_Date FROM `PROVIDER` p JOIN `USER_SUBSCRIPTION` us ON us.User_ID=p.User_ID JOIN `SUBSCRIPTION_PLAN` sp ON sp.Plan_ID=us.Plan_ID WHERE p.Provider_ID=? AND us.Status='ACTIVE' AND CURRENT_DATE BETWEEN us.Start_Date AND us.End_Date AND sp.Status='ACTIVE' AND sp.Target_Role IN ('PROVIDER','ALL') ORDER BY us.End_Date DESC LIMIT 1");
     $providerQuotaStmt->execute([(int)$slot['Provider_ID']]);
-    $providerMonthlyLimit=(int)($providerQuotaStmt->fetchColumn() ?: 0);
-    $providerUsedStmt=$db->prepare("SELECT COUNT(*) FROM `APPOINTMENT` a JOIN `SCHEDULED_SLOT` ss ON ss.Slot_ID=a.Slot_ID WHERE ss.Provider_ID=? AND a.Status NOT IN ('CANCELLED','REJECTED') AND MONTH(a.Booking_DateTime)=MONTH(CURRENT_DATE()) AND YEAR(a.Booking_DateTime)=YEAR(CURRENT_DATE())");
-    $providerUsedStmt->execute([(int)$slot['Provider_ID']]);
+    $providerSubRow=$providerQuotaStmt->fetch();
+    $providerMonthlyLimit=(int)($providerSubRow['Max_Book_per_Month'] ?? 0);
+    $providerSubCreated = $providerSubRow['Created_At'] ?? ($providerSubRow['Start_Date'] ?? '1970-01-01');
+
+    $providerUsedStmt=$db->prepare("SELECT COUNT(*) FROM `APPOINTMENT` a JOIN `SCHEDULED_SLOT` ss ON ss.Slot_ID=a.Slot_ID WHERE ss.Provider_ID=? AND a.Status NOT IN ('CANCELLED','REJECTED') AND a.Booking_DateTime >= ? AND MONTH(a.Booking_DateTime)=MONTH(CURRENT_DATE()) AND YEAR(a.Booking_DateTime)=YEAR(CURRENT_DATE())");
+    $providerUsedStmt->execute([(int)$slot['Provider_ID'], $providerSubCreated]);
     $providerUsed=(int)$providerUsedStmt->fetchColumn();
     if($providerMonthlyLimit<=0 || $providerUsed >= $providerMonthlyLimit){
         $db->rollBack();

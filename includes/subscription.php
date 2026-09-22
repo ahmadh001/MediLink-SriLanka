@@ -102,6 +102,7 @@ function getMonthlyBookingQuota(int $clientId, ?int $userId = null): array {
 
     $activeSub = getUserActiveSubscription($userId);
     $maxLimit = $activeSub ? (int)$activeSub['Max_Book_per_Month'] : 0;
+    $subCreated = $activeSub['Created_At'] ?? ($activeSub ? $activeSub['Start_Date'] . ' 00:00:00' : '1970-01-01 00:00:00');
 
     
     $qStmt = $db->prepare("
@@ -109,10 +110,11 @@ function getMonthlyBookingQuota(int $clientId, ?int $userId = null): array {
         FROM `APPOINTMENT`
         WHERE Client_ID = ?
           AND Status NOT IN ('CANCELLED', 'REJECTED')
+          AND Booking_DateTime >= ?
           AND MONTH(Booking_DateTime) = MONTH(CURRENT_DATE())
           AND YEAR(Booking_DateTime) = YEAR(CURRENT_DATE())
     ");
-    $qStmt->execute([$clientId]);
+    $qStmt->execute([$clientId, $subCreated]);
     $used = (int)$qStmt->fetch()['used_count'];
 
     $remaining = max(0, $maxLimit - $used);
